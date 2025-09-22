@@ -265,17 +265,17 @@ func (h *RateHandler) GetBestRate(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(utils.SuccessResponse(bestRate))
 }
 
-// CalculateRatesByProvider handles POST /rates/provider/:providerId
-func (h *RateHandler) CalculateRatesByProvider(c *fiber.Ctx) error {
+// CalculateRatesByImplementation handles POST /rates/implementation/:implementationId
+func (h *RateHandler) CalculateRatesByImplementation(c *fiber.Ctx) error {
 	startTime := time.Now()
 	requestID := c.Get(constants.HeaderRequestID)
-	providerID := c.Params("providerId")
+	implementationID := c.Params("implementationId")
 
-	if providerID == "" {
+	if implementationID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(utils.ErrorResponse(
-			"Provider ID is required",
+			"Implementation ID is required",
 			constants.CodeMissingParameter,
-			"providerId parameter is missing",
+			"implementationId parameter is missing",
 		))
 	}
 
@@ -302,43 +302,43 @@ func (h *RateHandler) CalculateRatesByProvider(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(utils.ValidationErrorResponse(err))
 	}
 
-	h.logger.Info("Processing provider-specific rate request",
+	h.logger.Info("Processing implementation-specific rate request",
 		"request_id", req.RequestID,
-		"provider_id", providerID)
+		"implementation_id", implementationID)
 
 	// Call service
-	response, err := h.rateService.CalculateRatesByProvider(c.Context(), &req, providerID)
+	response, err := h.rateService.CalculateRatesByImplementation(c.Context(), &req, implementationID)
 	if err != nil {
 		h.logger.Error("Provider rate calculation failed",
 			"error", err,
 			"request_id", req.RequestID,
-			"provider_id", providerID)
+			"implementation_id", implementationID)
 
 		return utils.HandleServiceError(c, err)
 	}
 
 	// Record metrics
 	duration := time.Since(startTime)
-	h.metrics.IncrementCounter("provider_rate_calculation_success", map[string]string{
-		"endpoint":    "calculate_rates_by_provider",
-		"provider_id": providerID,
+	h.metrics.IncrementCounter("implementation_rate_calculation_success", map[string]string{
+		"endpoint":    "calculate_rates_by_implementation",
+		"implementation_id": implementationID,
 	})
-	h.metrics.RecordTimer("provider_rate_calculation_duration", duration, map[string]string{
-		"endpoint":    "calculate_rates_by_provider",
-		"provider_id": providerID,
+	h.metrics.RecordTimer("implementation_rate_calculation_duration", duration, map[string]string{
+		"endpoint":    "calculate_rates_by_implementation",
+		"implementation_id": implementationID,
 	})
 
 	return c.Status(fiber.StatusOK).JSON(utils.SuccessResponse(response))
 }
 
-// GetProviderHealth handles GET /providers/health
-func (h *RateHandler) GetProviderHealth(c *fiber.Ctx) error {
+// GetImplementationHealth handles GET /implementations/health
+func (h *RateHandler) GetImplementationHealth(c *fiber.Ctx) error {
 	startTime := time.Now()
 
-	h.logger.Info("Processing provider health check request")
+	h.logger.Info("Processing implementation health check request")
 
 	// Call service
-	healthResponse, err := h.rateService.GetProviderHealth(c.Context())
+	healthResponse, err := h.rateService.GetImplementationHealth(c.Context())
 	if err != nil {
 		h.logger.Error("Provider health check failed", "error", err)
 
@@ -356,33 +356,33 @@ func (h *RateHandler) GetProviderHealth(c *fiber.Ctx) error {
 
 	// Record metrics
 	duration := time.Since(startTime)
-	h.metrics.IncrementCounter("provider_health_check_success", map[string]string{
-		"endpoint": "get_provider_health",
+	h.metrics.IncrementCounter("implementation_health_check_success", map[string]string{
+		"endpoint": "get_implementation_health",
 		"status":   healthResponse.Status,
 	})
-	h.metrics.RecordTimer("provider_health_check_duration", duration, map[string]string{
-		"endpoint": "get_provider_health",
+	h.metrics.RecordTimer("implementation_health_check_duration", duration, map[string]string{
+		"endpoint": "get_implementation_health",
 	})
 
 	return c.Status(status).JSON(utils.SuccessResponse(healthResponse))
 }
 
-// RefreshProviders handles POST /providers/refresh
-func (h *RateHandler) RefreshProviders(c *fiber.Ctx) error {
+// RefreshImplementations handles POST /implementations/refresh
+func (h *RateHandler) RefreshImplementations(c *fiber.Ctx) error {
 	startTime := time.Now()
 	requestID := c.Get(constants.HeaderRequestID)
 
-	h.logger.Info("Processing provider refresh request", "request_id", requestID)
+	h.logger.Info("Processing implementation refresh request", "request_id", requestID)
 
 	// Call service
-	err := h.rateService.RefreshProviders(c.Context())
+	err := h.rateService.RefreshImplementations(c.Context())
 	if err != nil {
 		h.logger.Error("Provider refresh failed",
 			"error", err,
 			"request_id", requestID)
 
-		h.metrics.IncrementCounter("provider_refresh_failed", map[string]string{
-			"endpoint": "refresh_providers",
+		h.metrics.IncrementCounter("implementation_refresh_failed", map[string]string{
+			"endpoint": "refresh_implementations",
 		})
 
 		return utils.HandleServiceError(c, err)
@@ -390,11 +390,11 @@ func (h *RateHandler) RefreshProviders(c *fiber.Ctx) error {
 
 	// Record metrics
 	duration := time.Since(startTime)
-	h.metrics.IncrementCounter("provider_refresh_success", map[string]string{
-		"endpoint": "refresh_providers",
+	h.metrics.IncrementCounter("implementation_refresh_success", map[string]string{
+		"endpoint": "refresh_implementations",
 	})
-	h.metrics.RecordTimer("provider_refresh_duration", duration, map[string]string{
-		"endpoint": "refresh_providers",
+	h.metrics.RecordTimer("implementation_refresh_duration", duration, map[string]string{
+		"endpoint": "refresh_implementations",
 	})
 
 	h.logger.Info("Provider refresh completed",

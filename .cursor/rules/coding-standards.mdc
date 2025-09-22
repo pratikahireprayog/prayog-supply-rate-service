@@ -40,33 +40,33 @@ alwaysApply: true
 - Use value receivers for methods that don't modify the struct
 
 ### Factory Pattern Implementation
-- Use factory pattern for creating rate providers (dynamic and static)
-- Each provider should implement a common interface
-- Factory should register and manage different provider types
-- Support for runtime provider selection based on configuration
+- Use factory pattern for creating rate implementations (real-time and pre-defined)
+- Each implementation should implement a common interface
+- Factory should register and manage different implementation types
+- Support for runtime implementation selection based on configuration
 
 ```go
-// Rate provider interface
-type RateProvider interface {
+// Rate implementation interface
+type RateImplementation interface {
     GetRate(ctx context.Context, req *RateRequest) (*RateResponse, error)
-    GetProviderType() ProviderType
+    GetImplementationType() ImplementationType
     IsHealthy(ctx context.Context) error
 }
 
 // Factory pattern
-type RateProviderFactory struct {
-    providers map[ProviderType]RateProvider
+type RateImplementationFactory struct {
+    implementations map[ImplementationType]RateImplementation
 }
 
-func (f *RateProviderFactory) CreateProvider(providerType ProviderType) (RateProvider, error) {
-    if provider, exists := f.providers[providerType]; exists {
-        return provider, nil
+func (f *RateImplementationFactory) CreateImplementation(implementationType ImplementationType) (RateImplementation, error) {
+    if implementation, exists := f.implementations[implementationType]; exists {
+        return implementation, nil
     }
-    return nil, ErrProviderNotFound
+    return nil, ErrImplementationNotFound
 }
 
-func (f *RateProviderFactory) RegisterProvider(provider RateProvider) {
-    f.providers[provider.GetProviderType()] = provider
+func (f *RateImplementationFactory) RegisterImplementation(implementation RateImplementation) {
+    f.implementations[implementation.GetImplementationType()] = implementation
 }
 ```
 

@@ -11,8 +11,8 @@ type ProviderType = models.PartnerType
 
 // Provider type constants - using the same values as models
 const (
-	ProviderTypeStatic  = models.PartnerTypeStatic
-	ProviderTypeDynamic = models.PartnerTypeDynamic
+	ProviderTypePreDefined = models.PartnerTypePreDefined
+	ProviderTypeRealTime   = models.PartnerTypeRealTime
 )
 
 // APIResponse represents a standard API response
@@ -130,7 +130,7 @@ type ProviderHealthStatus struct {
 type PartnerRequest struct {
 	Name        string                 `json:"name" validate:"required,min=2,max=100"`
 	Code        string                 `json:"code" validate:"required,min=2,max=20,alphanum"`
-	Type        ProviderType           `json:"type" validate:"required,oneof=static dynamic"`
+	Type        ProviderType           `json:"type" validate:"required,oneof=pre_defined real_time"`
 	IsActive    bool                   `json:"is_active"`
 	Priority    int                    `json:"priority" validate:"required,min=1,max=10"`
 	Config      map[string]interface{} `json:"config,omitempty"`

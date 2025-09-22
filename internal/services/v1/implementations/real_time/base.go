@@ -1,4 +1,4 @@
-package dynamic
+package realtime
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
 )
 
-// BaseDynamicProvider provides a base implementation for dynamic rate providers
-type BaseDynamicProvider struct {
+// BaseRealTime provides a base implementation for real-time rates
+type BaseRealTime struct {
 	partner          *models.Partner
 	config           map[string]interface{}
 	logger           interfaces.Logger
@@ -22,14 +22,14 @@ type BaseDynamicProvider struct {
 	isInitialized    bool
 }
 
-// NewBaseDynamicProvider creates a new base dynamic provider
-func NewBaseDynamicProvider(
+// NewBaseRealTime creates a new base real-time implementation
+func NewBaseRealTime(
 	partner *models.Partner,
 	logger interfaces.Logger,
 	metrics interfaces.MetricsCollector,
 	httpClient interfaces.HTTPClient,
-) *BaseDynamicProvider {
-	return &BaseDynamicProvider{
+) *BaseRealTime {
+	return &BaseRealTime{
 		partner:    partner,
 		logger:     logger,
 		metrics:    metrics,
@@ -37,18 +37,18 @@ func NewBaseDynamicProvider(
 	}
 }
 
-// GetProviderType returns the provider type
-func (p *BaseDynamicProvider) GetProviderType() dtos.ProviderType {
-	return dtos.ProviderTypeDynamic
+// GetProviderType returns the implementation type
+func (p *BaseRealTime) GetProviderType() dtos.ProviderType {
+	return dtos.ProviderTypeRealTime
 }
 
-// GetProviderName returns the provider name
-func (p *BaseDynamicProvider) GetProviderName() string {
+// GetProviderName returns the implementation name
+func (p *BaseRealTime) GetProviderName() string {
 	return p.partner.Name
 }
 
-// Initialize initializes the provider with configuration
-func (p *BaseDynamicProvider) Initialize(config map[string]interface{}) error {
+// Initialize initializes the implementation with configuration
+func (p *BaseRealTime) Initialize(config map[string]interface{}) error {
 	if p.partner == nil {
 		return fmt.Errorf("partner cannot be nil")
 	}
@@ -66,7 +66,7 @@ func (p *BaseDynamicProvider) Initialize(config map[string]interface{}) error {
 
 	p.isInitialized = true
 
-	p.logger.Info("Dynamic provider initialized",
+	p.logger.Info("Real-time implementation initialized",
 		"partner_id", p.partner.ID,
 		"partner_name", p.partner.Name,
 		"api_endpoint", p.partner.GetAPIEndpoint())
@@ -75,9 +75,9 @@ func (p *BaseDynamicProvider) Initialize(config map[string]interface{}) error {
 }
 
 // IsHealthy performs a health check
-func (p *BaseDynamicProvider) IsHealthy(ctx context.Context) error {
+func (p *BaseRealTime) IsHealthy(ctx context.Context) error {
 	if !p.isInitialized {
-		return constants.ErrProviderInitFail
+		return constants.ErrImplementationInitFail
 	}
 
 	if !p.partner.IsHealthy() {
@@ -88,33 +88,33 @@ func (p *BaseDynamicProvider) IsHealthy(ctx context.Context) error {
 	return p.performAPIHealthCheck(ctx)
 }
 
-// GetConfiguration returns the provider configuration
-func (p *BaseDynamicProvider) GetConfiguration() map[string]interface{} {
+// GetConfiguration returns the implementation configuration
+func (p *BaseRealTime) GetConfiguration() map[string]interface{} {
 	return p.config
 }
 
-// Close gracefully shuts down the provider
-func (p *BaseDynamicProvider) Close() error {
+// Close gracefully shuts down the implementation
+func (p *BaseRealTime) Close() error {
 	p.isInitialized = false
-	p.logger.Info("Dynamic provider closed", "partner_id", p.partner.ID)
+	p.logger.Info("Real-time implementation closed", "partner_id", p.partner.ID)
 	return nil
 }
 
-// GetRates is the main interface method - must be implemented by concrete providers
-func (p *BaseDynamicProvider) GetRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
+// GetRates is the main interface method - must be implemented by concrete implementations
+func (p *BaseRealTime) GetRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
 	return nil, constants.ErrNotImplemented
 }
 
 // GetRealTimeQuote gets a real-time quote from the partner API
-func (p *BaseDynamicProvider) GetRealTimeQuote(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
-	// This is the same as GetRates for dynamic providers
+func (p *BaseRealTime) GetRealTimeQuote(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
+	// This is the same as GetRates for real-time implementations
 	return p.GetRates(ctx, request)
 }
 
 // ValidateAPICredentials validates the API credentials
-func (p *BaseDynamicProvider) ValidateAPICredentials(ctx context.Context) error {
+func (p *BaseRealTime) ValidateAPICredentials(ctx context.Context) error {
 	if !p.isInitialized {
-		return constants.ErrProviderInitFail
+		return constants.ErrImplementationInitFail
 	}
 
 	// Create a simple health check request
@@ -122,8 +122,8 @@ func (p *BaseDynamicProvider) ValidateAPICredentials(ctx context.Context) error 
 }
 
 // GetAPILimits returns the API rate limits and usage
-func (p *BaseDynamicProvider) GetAPILimits(ctx context.Context) (*dtos.APILimits, error) {
-	// This should be implemented by concrete providers
+func (p *BaseRealTime) GetAPILimits(ctx context.Context) (*dtos.APILimits, error) {
+	// This should be implemented by concrete implementations
 	// Return default limits for now
 	return &dtos.APILimits{
 		Limit:     1000,
@@ -134,17 +134,17 @@ func (p *BaseDynamicProvider) GetAPILimits(ctx context.Context) (*dtos.APILimits
 }
 
 // GetLastResponseTime returns the last API response time
-func (p *BaseDynamicProvider) GetLastResponseTime() time.Duration {
+func (p *BaseRealTime) GetLastResponseTime() time.Duration {
 	return p.lastResponseTime
 }
 
 // Protected helper methods for concrete implementations
 
-// ValidateConfiguration validates the provider configuration
-func (p *BaseDynamicProvider) validateConfiguration() error {
+// ValidateConfiguration validates the implementation configuration
+func (p *BaseRealTime) validateConfiguration() error {
 	// Check API endpoint
 	if p.partner.APIEndpoint == nil || *p.partner.APIEndpoint == "" {
-		return fmt.Errorf("API endpoint is required for dynamic provider")
+		return fmt.Errorf("API endpoint is required for real-time implementation")
 	}
 
 	// Check API key if required
@@ -160,15 +160,15 @@ func (p *BaseDynamicProvider) validateConfiguration() error {
 	return nil
 }
 
-// RequiresAPIKey determines if the provider requires an API key
-func (p *BaseDynamicProvider) requiresAPIKey() bool {
-	// Most dynamic providers require API keys
+// RequiresAPIKey determines if the implementation requires an API key
+func (p *BaseRealTime) requiresAPIKey() bool {
+	// Most real-time implementations require API keys
 	// Concrete implementations can override this
 	return true
 }
 
 // PerformAPIHealthCheck performs a health check against the partner API
-func (p *BaseDynamicProvider) performAPIHealthCheck(ctx context.Context) error {
+func (p *BaseRealTime) performAPIHealthCheck(ctx context.Context) error {
 	if p.httpClient == nil {
 		return fmt.Errorf("HTTP client not configured")
 	}
@@ -182,7 +182,7 @@ func (p *BaseDynamicProvider) performAPIHealthCheck(ctx context.Context) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(p.partner.TimeoutMs)*time.Millisecond)
 	defer cancel()
 
-	// Perform health check (this should be implemented by concrete providers)
+	// Perform health check (this should be implemented by concrete implementations)
 	startTime := time.Now()
 
 	// For base implementation, just validate the endpoint is reachable
@@ -196,11 +196,11 @@ func (p *BaseDynamicProvider) performAPIHealthCheck(ctx context.Context) error {
 		status = "failure"
 	}
 
-	p.metrics.IncrementCounter("provider_health_check", map[string]string{
+	p.metrics.IncrementCounter("implementation_health_check", map[string]string{
 		"partner_id": p.partner.ID.String(),
 		"status":     status,
 	})
-	p.metrics.RecordTimer("provider_health_check_time", p.lastResponseTime, map[string]string{
+	p.metrics.RecordTimer("implementation_health_check_time", p.lastResponseTime, map[string]string{
 		"partner_id": p.partner.ID.String(),
 	})
 
@@ -208,7 +208,7 @@ func (p *BaseDynamicProvider) performAPIHealthCheck(ctx context.Context) error {
 }
 
 // PingEndpoint performs a basic connectivity check to the API endpoint
-func (p *BaseDynamicProvider) pingEndpoint(ctx context.Context, endpoint string) error {
+func (p *BaseRealTime) pingEndpoint(ctx context.Context, endpoint string) error {
 	// This is a simplified implementation
 	// In a real implementation, you would make an actual HTTP request
 	// to a health check endpoint or perform a basic connectivity test
@@ -223,7 +223,7 @@ func (p *BaseDynamicProvider) pingEndpoint(ctx context.Context, endpoint string)
 }
 
 // BuildStandardResponse builds a standard rate calculation response
-func (p *BaseDynamicProvider) buildStandardResponse(request *dtos.RateCalculationRequest, quotes []dtos.RateQuote) *dtos.RateCalculationResponse {
+func (p *BaseRealTime) buildStandardResponse(request *dtos.RateCalculationRequest, quotes []dtos.RateQuote) *dtos.RateCalculationResponse {
 	var bestQuote *dtos.RateQuote
 	if len(quotes) > 0 {
 		// Simple best quote selection (lowest price)
@@ -257,10 +257,10 @@ func (p *BaseDynamicProvider) buildStandardResponse(request *dtos.RateCalculatio
 }
 
 // CreateQuote creates a quote with standard fields populated
-func (p *BaseDynamicProvider) createQuote(request *dtos.RateCalculationRequest, basePrice float64, estimatedDays int) dtos.RateQuote {
+func (p *BaseRealTime) createQuote(request *dtos.RateCalculationRequest, basePrice float64, estimatedDays int) dtos.RateQuote {
 	quoteID := fmt.Sprintf("%s-%d", p.partner.Code, time.Now().UnixNano())
 
-	// Calculate additional charges (these should be implemented by concrete providers)
+	// Calculate additional charges (these should be implemented by concrete implementations)
 	fuelSurcharge := basePrice * 0.05 // 5% fuel surcharge
 	handlingCharge := 50.0            // Fixed handling charge
 	taxAmount := basePrice * 0.18     // 18% tax
@@ -271,7 +271,7 @@ func (p *BaseDynamicProvider) createQuote(request *dtos.RateCalculationRequest, 
 		QuoteID:      quoteID,
 		PartnerID:    p.partner.ID.String(),
 		PartnerName:  p.partner.Name,
-		ProviderType: dtos.ProviderTypeDynamic,
+		ProviderType: dtos.ProviderTypeRealTime,
 
 		BasePrice:  basePrice,
 		TotalPrice: totalPrice,
@@ -291,19 +291,19 @@ func (p *BaseDynamicProvider) createQuote(request *dtos.RateCalculationRequest, 
 		EstimatedHours: estimatedDays * 24,
 
 		ValidUntil: time.Now().Add(24 * time.Hour), // 24 hour validity
-		Confidence: 0.85,                           // Default confidence
+		Confidence: 0.85,                           // Default confidence for real-time rates
 
 		InsuranceAvailable: true,
 		TrackingAvailable:  true,
 		SignatureAvailable: true,
 
-		Source:         "dynamic",
+		Source:         "real_time",
 		ResponseTimeMs: p.lastResponseTime.Milliseconds(),
 	}
 }
 
 // LogAPIRequest logs API requests for debugging and monitoring
-func (p *BaseDynamicProvider) logAPIRequest(method, url string, requestBody interface{}, duration time.Duration, err error) {
+func (p *BaseRealTime) logAPIRequest(method, url string, requestBody interface{}, duration time.Duration, err error) {
 	status := "success"
 	if err != nil {
 		status = "error"

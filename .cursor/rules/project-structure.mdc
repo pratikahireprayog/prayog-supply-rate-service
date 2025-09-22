@@ -30,10 +30,10 @@ This is a Go microservice for rate card management following clean architecture 
 
 ### Business Logic Layer
 - [internal/services/v1/](mdc:internal/services/v1) - Core business logic and use cases
-- [internal/services/v1/factory/](mdc:internal/services/v1/factory) - Factory pattern implementation for rate providers
-- [internal/services/v1/providers/](mdc:internal/services/v1/providers) - Rate provider implementations (dynamic and static)
-- [internal/services/v1/providers/dynamic/](mdc:internal/services/v1/providers/dynamic) - Dynamic rate providers (API-based)
-- [internal/services/v1/providers/static/](mdc:internal/services/v1/providers/static) - Static rate providers (database/file-based)
+- [internal/services/v1/factory/](mdc:internal/services/v1/factory) - Factory pattern implementation for rate implementations
+- [internal/services/v1/implementations/](mdc:internal/services/v1/implementations) - Rate implementation classes (real-time and pre-defined)
+- [internal/services/v1/implementations/real_time/](mdc:internal/services/v1/implementations/real_time) - Real-time rate implementations (API-based)
+- [internal/services/v1/implementations/pre_defined/](mdc:internal/services/v1/implementations/pre_defined) - Pre-defined rate implementations (database/file-based)
 
 ### Shared Components
 - [internal/shared/constants/v1/](mdc:internal/shared/constants/v1) - Application constants
@@ -79,17 +79,17 @@ API Layer → Services Layer → Shared Layer
 7. **Interfaces**: Place in `internal/shared/interfaces/v1/` - Contract definitions
 8. **Constants**: Place in `internal/shared/constants/v1/` - Application constants and enums
 9. **Utilities**: Place in `internal/shared/utils/v1/` - Helper functions
-10. **Rate Providers**: Place in `internal/services/v1/providers/` - Rate provider implementations
+10. **Rate Implementations**: Place in `internal/services/v1/implementations/` - Rate implementation classes
 11. **Factory**: Place in `internal/services/v1/factory/` - Factory pattern implementations
-12. **Dynamic Providers**: Place in `internal/services/v1/providers/dynamic/` - API-based rate providers
-13. **Static Providers**: Place in `internal/services/v1/providers/static/` - Database/file-based providers
+12. **Real-time Implementations**: Place in `internal/services/v1/implementations/real_time/` - API-based rate implementations
+13. **Pre-defined Implementations**: Place in `internal/services/v1/implementations/pre_defined/` - Database/file-based implementations
 
 ### Rate Service Specific Guidelines:
 - **Rate Models**: Core rate entities (Rate, Partner, RateMatrix, etc.)
-- **Provider Interfaces**: Common interfaces for all rate providers
-- **Factory Registration**: Centralized provider registration and creation
-- **Consistent DTOs**: Same request/response format for all providers
-- **Provider Health Checks**: Health monitoring for external rate providers
+- **Implementation Interfaces**: Common interfaces for all rate implementations
+- **Factory Registration**: Centralized implementation registration and creation
+- **Consistent DTOs**: Same request/response format for all implementations
+- **Implementation Health Checks**: Health monitoring for external rate implementations
 - **Caching Strategy**: Cache frequently accessed rates with appropriate TTL
 
 ### Cross-Layer Communication:

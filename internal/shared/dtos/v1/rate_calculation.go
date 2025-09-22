@@ -24,7 +24,7 @@ type RateCalculationRequest struct {
 
 	// Optional filters
 	PartnerIDs    []string `json:"partner_ids,omitempty"`
-	ProviderTypes []string `json:"provider_types,omitempty" validate:"dive,oneof=static dynamic"`
+	ProviderTypes []string `json:"provider_types,omitempty" validate:"dive,oneof=pre_defined real_time"`
 	MaxPrice      *float64 `json:"max_price,omitempty" validate:"omitempty,min=0"`
 	MaxDays       *int     `json:"max_days,omitempty" validate:"omitempty,min=1,max=30"`
 

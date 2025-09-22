@@ -39,7 +39,7 @@ type RateResponse struct {
 	Confidence    float64   `json:"confidence" gorm:"not null;default:1.0" validate:"required,min=0,max=1"`
 
 	// Source and Metadata
-	Source          string     `json:"source" gorm:"not null" validate:"required,oneof=static dynamic cached"`
+	Source          string     `json:"source" gorm:"not null" validate:"required,oneof=pre_defined real_time cached"`
 	ResponseTimeMs  int64      `json:"response_time_ms" gorm:"not null" validate:"required,min=0"`
 	CacheHit        bool       `json:"cache_hit" gorm:"not null;default:false"`
 	RateRuleID      *uuid.UUID `json:"rate_rule_id,omitempty" gorm:"type:uuid;index"`

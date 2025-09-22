@@ -1,4 +1,4 @@
-package static
+package predefined
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
 )
 
-// BaseStaticProvider provides a base implementation for static rate providers
-type BaseStaticProvider struct {
+// BasePreDefined provides a base implementation for pre-defined rates
+type BasePreDefined struct {
 	partner       *models.Partner
 	config        map[string]interface{}
 	logger        interfaces.Logger
@@ -25,15 +25,15 @@ type BaseStaticProvider struct {
 	cacheInfo *dtos.CacheInfo
 }
 
-// NewBaseStaticProvider creates a new base static provider
-func NewBaseStaticProvider(
+// NewBasePreDefined creates a new base pre-defined implementation
+func NewBasePreDefined(
 	partner *models.Partner,
 	logger interfaces.Logger,
 	metrics interfaces.MetricsCollector,
 	rateRepo interfaces.RateRepository,
 	cacheManager interfaces.CacheManager,
-) *BaseStaticProvider {
-	return &BaseStaticProvider{
+) *BasePreDefined {
+	return &BasePreDefined{
 		partner:      partner,
 		logger:       logger,
 		metrics:      metrics,
@@ -50,18 +50,18 @@ func NewBaseStaticProvider(
 	}
 }
 
-// GetProviderType returns the provider type
-func (p *BaseStaticProvider) GetProviderType() dtos.ProviderType {
-	return dtos.ProviderTypeStatic
+// GetProviderType returns the implementation type
+func (p *BasePreDefined) GetProviderType() dtos.ProviderType {
+	return dtos.ProviderTypePreDefined
 }
 
-// GetProviderName returns the provider name
-func (p *BaseStaticProvider) GetProviderName() string {
+// GetProviderName returns the implementation name
+func (p *BasePreDefined) GetProviderName() string {
 	return p.partner.Name
 }
 
-// Initialize initializes the provider with configuration
-func (p *BaseStaticProvider) Initialize(config map[string]interface{}) error {
+// Initialize initializes the implementation with configuration
+func (p *BasePreDefined) Initialize(config map[string]interface{}) error {
 	if p.partner == nil {
 		return fmt.Errorf("partner cannot be nil")
 	}
@@ -75,7 +75,7 @@ func (p *BaseStaticProvider) Initialize(config map[string]interface{}) error {
 
 	p.isInitialized = true
 
-	p.logger.Info("Static provider initialized",
+	p.logger.Info("Pre-defined implementation initialized",
 		"partner_id", p.partner.ID,
 		"partner_name", p.partner.Name,
 		"total_rates", p.cacheInfo.TotalEntries)
@@ -84,9 +84,9 @@ func (p *BaseStaticProvider) Initialize(config map[string]interface{}) error {
 }
 
 // IsHealthy performs a health check
-func (p *BaseStaticProvider) IsHealthy(ctx context.Context) error {
+func (p *BasePreDefined) IsHealthy(ctx context.Context) error {
 	if !p.isInitialized {
-		return constants.ErrProviderInitFail
+		return constants.ErrImplementationInitFail
 	}
 
 	if !p.partner.IsActive {
@@ -101,24 +101,24 @@ func (p *BaseStaticProvider) IsHealthy(ctx context.Context) error {
 	return nil
 }
 
-// GetConfiguration returns the provider configuration
-func (p *BaseStaticProvider) GetConfiguration() map[string]interface{} {
+// GetConfiguration returns the implementation configuration
+func (p *BasePreDefined) GetConfiguration() map[string]interface{} {
 	return p.config
 }
 
-// Close gracefully shuts down the provider
-func (p *BaseStaticProvider) Close() error {
+// Close gracefully shuts down the implementation
+func (p *BasePreDefined) Close() error {
 	p.isInitialized = false
-	p.logger.Info("Static provider closed", "partner_id", p.partner.ID)
+	p.logger.Info("Pre-defined implementation closed", "partner_id", p.partner.ID)
 	return nil
 }
 
-// GetRates calculates rates from static data
-func (p *BaseStaticProvider) GetRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
+// GetRates calculates rates from pre-defined data
+func (p *BasePreDefined) GetRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
 	startTime := time.Now()
 
 	if !p.isInitialized {
-		return nil, constants.ErrProviderInitFail
+		return nil, constants.ErrImplementationInitFail
 	}
 
 	// Build rate criteria from request
@@ -127,7 +127,7 @@ func (p *BaseStaticProvider) GetRates(ctx context.Context, request *dtos.RateCal
 	// Get matching rates from repository
 	rates, err := p.rateRepo.GetByCriteria(ctx, criteria)
 	if err != nil {
-		p.metrics.IncrementCounter("static_provider_error", map[string]string{
+		p.metrics.IncrementCounter("pre_defined_implementation_error", map[string]string{
 			"partner_id": p.partner.ID.String(),
 			"error_type": "repository_error",
 		})
@@ -142,15 +142,15 @@ func (p *BaseStaticProvider) GetRates(ctx context.Context, request *dtos.RateCal
 	response.ResponseTime = time.Since(startTime).Milliseconds()
 
 	// Update metrics
-	p.metrics.IncrementCounter("static_provider_calculation", map[string]string{
+	p.metrics.IncrementCounter("pre_defined_implementation_calculation", map[string]string{
 		"partner_id":   p.partner.ID.String(),
 		"total_quotes": fmt.Sprintf("%d", len(quotes)),
 	})
-	p.metrics.RecordTimer("static_provider_calculation_time", time.Since(startTime), map[string]string{
+	p.metrics.RecordTimer("pre_defined_implementation_calculation_time", time.Since(startTime), map[string]string{
 		"partner_id": p.partner.ID.String(),
 	})
 
-	p.logger.Debug("Static rate calculation completed",
+	p.logger.Debug("Pre-defined rate calculation completed",
 		"partner_id", p.partner.ID,
 		"request_id", request.RequestID,
 		"matching_rates", len(rates),
@@ -160,12 +160,12 @@ func (p *BaseStaticProvider) GetRates(ctx context.Context, request *dtos.RateCal
 	return response, nil
 }
 
-// RefreshRates refreshes the static rate cache
-func (p *BaseStaticProvider) RefreshRates(ctx context.Context) error {
+// RefreshRates refreshes the pre-defined rate cache
+func (p *BasePreDefined) RefreshRates(ctx context.Context) error {
 	p.logger.Info("Starting rate refresh", "partner_id", p.partner.ID)
 
 	if err := p.loadRateData(ctx); err != nil {
-		p.metrics.IncrementCounter("static_provider_refresh_failed", map[string]string{
+		p.metrics.IncrementCounter("pre_defined_implementation_refresh_failed", map[string]string{
 			"partner_id": p.partner.ID.String(),
 		})
 		return fmt.Errorf("failed to refresh rates: %w", err)
@@ -174,7 +174,7 @@ func (p *BaseStaticProvider) RefreshRates(ctx context.Context) error {
 	p.cacheInfo.LastRefresh = time.Now()
 	p.cacheInfo.NextRefresh = time.Now().Add(time.Hour)
 
-	p.metrics.IncrementCounter("static_provider_refresh_success", map[string]string{
+	p.metrics.IncrementCounter("pre_defined_implementation_refresh_success", map[string]string{
 		"partner_id": p.partner.ID.String(),
 	})
 
@@ -186,12 +186,12 @@ func (p *BaseStaticProvider) RefreshRates(ctx context.Context) error {
 }
 
 // GetCacheInfo returns information about the cache status
-func (p *BaseStaticProvider) GetCacheInfo() *dtos.CacheInfo {
+func (p *BasePreDefined) GetCacheInfo() *dtos.CacheInfo {
 	return p.cacheInfo
 }
 
-// ValidateRateData validates the static rate data
-func (p *BaseStaticProvider) ValidateRateData(rates []*models.Rate) error {
+// ValidateRateData validates the pre-defined rate data
+func (p *BasePreDefined) ValidateRateData(rates []*models.Rate) error {
 	if len(rates) == 0 {
 		return fmt.Errorf("no rates provided for validation")
 	}
@@ -249,7 +249,7 @@ func (p *BaseStaticProvider) ValidateRateData(rates []*models.Rate) error {
 
 // Private helper methods
 
-func (p *BaseStaticProvider) loadRateData(ctx context.Context) error {
+func (p *BasePreDefined) loadRateData(ctx context.Context) error {
 	// Get all rates for this partner
 	rates, err := p.rateRepo.GetByPartner(ctx, p.partner.ID.String())
 	if err != nil {
@@ -275,7 +275,7 @@ func (p *BaseStaticProvider) loadRateData(ctx context.Context) error {
 	return nil
 }
 
-func (p *BaseStaticProvider) performRepositoryHealthCheck(ctx context.Context) error {
+func (p *BasePreDefined) performRepositoryHealthCheck(ctx context.Context) error {
 	// Try to get a count of rates for this partner
 	rates, err := p.rateRepo.GetByPartner(ctx, p.partner.ID.String())
 	if err != nil {
@@ -289,7 +289,7 @@ func (p *BaseStaticProvider) performRepositoryHealthCheck(ctx context.Context) e
 	return nil
 }
 
-func (p *BaseStaticProvider) buildRateCriteria(request *dtos.RateCalculationRequest) *dtos.RateCriteria {
+func (p *BasePreDefined) buildRateCriteria(request *dtos.RateCalculationRequest) *dtos.RateCriteria {
 	// Build criteria to find matching rates
 	now := time.Now()
 
@@ -311,7 +311,7 @@ func (p *BaseStaticProvider) buildRateCriteria(request *dtos.RateCalculationRequ
 	}
 }
 
-func (p *BaseStaticProvider) calculateQuotesFromRates(request *dtos.RateCalculationRequest, rates []*models.Rate) []dtos.RateQuote {
+func (p *BasePreDefined) calculateQuotesFromRates(request *dtos.RateCalculationRequest, rates []*models.Rate) []dtos.RateQuote {
 	var quotes []dtos.RateQuote
 
 	for _, rate := range rates {
@@ -331,7 +331,7 @@ func (p *BaseStaticProvider) calculateQuotesFromRates(request *dtos.RateCalculat
 	return quotes
 }
 
-func (p *BaseStaticProvider) isRateApplicable(rate *models.Rate, request *dtos.RateCalculationRequest) bool {
+func (p *BasePreDefined) isRateApplicable(rate *models.Rate, request *dtos.RateCalculationRequest) bool {
 	// Check if rate is valid for the pickup date
 	if !rate.IsValidForDate(request.PickupDate) {
 		return false
@@ -360,8 +360,8 @@ func (p *BaseStaticProvider) isRateApplicable(rate *models.Rate, request *dtos.R
 	return true
 }
 
-func (p *BaseStaticProvider) createQuote(request *dtos.RateCalculationRequest, rate *models.Rate, totalPrice float64) dtos.RateQuote {
-	quoteID := fmt.Sprintf("%s-static-%d", p.partner.Code, time.Now().UnixNano())
+func (p *BasePreDefined) createQuote(request *dtos.RateCalculationRequest, rate *models.Rate, totalPrice float64) dtos.RateQuote {
+	quoteID := fmt.Sprintf("%s-predefined-%d", p.partner.Code, time.Now().UnixNano())
 
 	// Calculate estimated delivery time based on service type
 	estimatedDays := p.calculateEstimatedDays(request.ServiceType, request.Distance)
@@ -378,7 +378,7 @@ func (p *BaseStaticProvider) createQuote(request *dtos.RateCalculationRequest, r
 		QuoteID:      quoteID,
 		PartnerID:    p.partner.ID.String(),
 		PartnerName:  p.partner.Name,
-		ProviderType: dtos.ProviderTypeStatic,
+		ProviderType: dtos.ProviderTypePreDefined,
 
 		BasePrice:      rate.BasePrice,
 		TotalPrice:     totalPrice,
@@ -391,20 +391,20 @@ func (p *BaseStaticProvider) createQuote(request *dtos.RateCalculationRequest, r
 		EstimatedHours: estimatedDays * 24,
 
 		ValidUntil: time.Now().Add(24 * time.Hour), // 24 hour validity
-		Confidence: 0.95,                           // Higher confidence for static rates
+		Confidence: 0.95,                           // Higher confidence for pre-defined rates
 
 		InsuranceAvailable: true,
 		TrackingAvailable:  true,
 		SignatureAvailable: true,
 
-		Source:         "static",
+		Source:         "pre_defined",
 		ResponseTimeMs: 0, // Will be set by caller
 
 		Terms: fmt.Sprintf("Rate valid from %s", rate.ValidFrom.Format("2006-01-02")),
 	}
 }
 
-func (p *BaseStaticProvider) calculateEstimatedDays(serviceType string, distance float64) int {
+func (p *BasePreDefined) calculateEstimatedDays(serviceType string, distance float64) int {
 	// Simple estimation logic based on service type and distance
 	baseDays := 1
 
@@ -431,7 +431,7 @@ func (p *BaseStaticProvider) calculateEstimatedDays(serviceType string, distance
 	return baseDays
 }
 
-func (p *BaseStaticProvider) buildStandardResponse(request *dtos.RateCalculationRequest, quotes []dtos.RateQuote) *dtos.RateCalculationResponse {
+func (p *BasePreDefined) buildStandardResponse(request *dtos.RateCalculationRequest, quotes []dtos.RateQuote) *dtos.RateCalculationResponse {
 	var bestQuote *dtos.RateQuote
 	if len(quotes) > 0 {
 		// Find the quote with the best price

@@ -8,47 +8,47 @@ import (
 	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
 )
 
-// RateProvider defines the interface for all rate providers
-type RateProvider interface {
+// RateImplementation defines the interface for all rate implementations
+type RateImplementation interface {
 	// GetRates retrieves rates based on the given criteria
 	GetRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error)
 
-	// GetProviderType returns the type of this provider
-	GetProviderType() dtos.ProviderType
+	// GetImplementationType returns the type of this implementation
+	GetImplementationType() dtos.ProviderType
 
-	// GetProviderName returns the name of this provider
-	GetProviderName() string
+	// GetImplementationName returns the name of this implementation
+	GetImplementationName() string
 
-	// IsHealthy checks if the provider is healthy and operational
+	// IsHealthy checks if the implementation is healthy and operational
 	IsHealthy(ctx context.Context) error
 
-	// GetConfiguration returns the provider's configuration
+	// GetConfiguration returns the implementation's configuration
 	GetConfiguration() map[string]interface{}
 
-	// Initialize initializes the provider with given configuration
+	// Initialize initializes the implementation with given configuration
 	Initialize(config map[string]interface{}) error
 
-	// Close gracefully shuts down the provider
+	// Close gracefully shuts down the implementation
 	Close() error
 }
 
-// StaticRateProvider defines additional methods for static rate providers
-type StaticRateProvider interface {
-	RateProvider
+// PreDefinedRate defines additional methods for pre-defined rates
+type PreDefinedRate interface {
+	RateImplementation
 
-	// RefreshRates refreshes the static rate cache
+	// RefreshRates refreshes the pre-defined rate cache
 	RefreshRates(ctx context.Context) error
 
 	// GetCacheInfo returns information about the cache status
 	GetCacheInfo() *dtos.CacheInfo
 
-	// ValidateRateData validates the static rate data
+	// ValidateRateData validates the pre-defined rate data
 	ValidateRateData(rates []*models.Rate) error
 }
 
-// DynamicRateProvider defines additional methods for dynamic rate providers
-type DynamicRateProvider interface {
-	RateProvider
+// RealTimeRate defines additional methods for real-time rates
+type RealTimeRate interface {
+	RateImplementation
 
 	// GetRealTimeQuote gets a real-time quote from the partner API
 	GetRealTimeQuote(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error)
@@ -63,55 +63,55 @@ type DynamicRateProvider interface {
 	GetLastResponseTime() time.Duration
 }
 
-// RateProviderFactory defines the interface for the factory pattern
-type RateProviderFactory interface {
-	// CreateProvider creates a provider instance by type and partner ID
-	CreateProvider(providerType dtos.ProviderType, partnerID string) (RateProvider, error)
+// RateFactory defines the interface for the factory pattern
+type RateFactory interface {
+	// CreateImplementation creates an implementation instance by type and partner ID
+	CreateImplementation(implementationType dtos.ProviderType, partnerID string) (RateImplementation, error)
 
-	// RegisterProvider registers a new provider implementation
-	RegisterProvider(providerType dtos.ProviderType, creator ProviderCreator) error
+	// RegisterImplementation registers a new implementation creator
+	RegisterImplementation(implementationType dtos.ProviderType, creator ImplementationCreator) error
 
-	// GetRegisteredProviders returns all registered provider types
-	GetRegisteredProviders() []dtos.ProviderType
+	// GetRegisteredImplementations returns all registered implementation types
+	GetRegisteredImplementations() []dtos.ProviderType
 
-	// IsProviderRegistered checks if a provider type is registered
-	IsProviderRegistered(providerType dtos.ProviderType) bool
+	// IsImplementationRegistered checks if an implementation type is registered
+	IsImplementationRegistered(implementationType dtos.ProviderType) bool
 
-	// GetProviderInstance gets an existing provider instance
-	GetProviderInstance(partnerID string) (RateProvider, error)
+	// GetImplementationInstance gets an existing implementation instance
+	GetImplementationInstance(partnerID string) (RateImplementation, error)
 
-	// RemoveProviderInstance removes a provider instance
-	RemoveProviderInstance(partnerID string) error
+	// RemoveImplementationInstance removes an implementation instance
+	RemoveImplementationInstance(partnerID string) error
 
-	// GetAllInstances returns all active provider instances
-	GetAllInstances() map[string]RateProvider
+	// GetAllInstances returns all active implementation instances
+	GetAllInstances() map[string]RateImplementation
 
-	// HealthCheckAll performs health check on all provider instances
+	// HealthCheckAll performs health check on all implementation instances
 	HealthCheckAll(ctx context.Context) map[string]error
 }
 
-// ProviderCreator defines the function signature for creating provider instances
-type ProviderCreator func(partner *models.Partner) (RateProvider, error)
+// ImplementationCreator defines the function signature for creating implementation instances
+type ImplementationCreator func(partner *models.Partner) (RateImplementation, error)
 
 // RateService defines the main service interface for rate calculations
 type RateService interface {
-	// CalculateRates calculates rates from all available providers
+	// CalculateRates calculates rates from all available implementations
 	CalculateRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error)
 
-	// CalculateRatesByProvider calculates rates from a specific provider
-	CalculateRatesByProvider(ctx context.Context, request *dtos.RateCalculationRequest, providerID string) (*dtos.RateCalculationResponse, error)
+	// CalculateRatesByImplementation calculates rates from a specific implementation
+	CalculateRatesByImplementation(ctx context.Context, request *dtos.RateCalculationRequest, implementationID string) (*dtos.RateCalculationResponse, error)
 
-	// GetBestRate returns the best rate from all available providers
+	// GetBestRate returns the best rate from all available implementations
 	GetBestRate(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateQuote, error)
 
-	// CompareRates compares rates from multiple providers
+	// CompareRates compares rates from multiple implementations
 	CompareRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateComparisonResponse, error)
 
-	// GetProviderHealth returns health status of all providers
-	GetProviderHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error)
+	// GetImplementationHealth returns health status of all implementations
+	GetImplementationHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error)
 
-	// RefreshProviders refreshes all provider configurations
-	RefreshProviders(ctx context.Context) error
+	// RefreshImplementations refreshes all implementation configurations
+	RefreshImplementations(ctx context.Context) error
 }
 
 // PartnerRepository defines the interface for partner data access

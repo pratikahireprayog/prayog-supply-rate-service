@@ -209,13 +209,13 @@ func (m *MockRateService) CalculateRates(ctx context.Context, request *dtos.Rate
 		Timestamp:   time.Now(),
 		Metadata: map[string]interface{}{
 			"phase":      1,
-			"next_phase": "Dynamic rate providers implementation",
+			"next_phase": "Real-time rate providers implementation",
 		},
 	}, nil
 }
 
-func (m *MockRateService) CalculateRatesByProvider(ctx context.Context, request *dtos.RateCalculationRequest, providerID string) (*dtos.RateCalculationResponse, error) {
-	m.logger.Info("Mock: CalculateRatesByProvider called", "provider_id", providerID)
+func (m *MockRateService) CalculateRatesByImplementation(ctx context.Context, request *dtos.RateCalculationRequest, implementationID string) (*dtos.RateCalculationResponse, error) {
+	m.logger.Info("Mock: CalculateRatesByImplementation called", "implementation_id", implementationID)
 	return &dtos.RateCalculationResponse{
 		RequestID:   request.RequestID,
 		Status:      "not_implemented",
@@ -224,9 +224,9 @@ func (m *MockRateService) CalculateRatesByProvider(ctx context.Context, request 
 		TotalQuotes: 0,
 		Timestamp:   time.Now(),
 		Metadata: map[string]interface{}{
-			"provider_id": providerID,
+			"implementation_id": implementationID,
 		},
-	}, fmt.Errorf("%w: provider-specific calculation", constants.ErrNotImplemented)
+	}, fmt.Errorf("%w: implementation-specific calculation", constants.ErrNotImplemented)
 }
 
 func (m *MockRateService) GetBestRate(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateQuote, error) {
@@ -248,8 +248,8 @@ func (m *MockRateService) CompareRates(ctx context.Context, request *dtos.RateCa
 	}, fmt.Errorf("%w: rate comparison", constants.ErrNotImplemented)
 }
 
-func (m *MockRateService) GetProviderHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error) {
-	m.logger.Info("Mock: GetProviderHealth called")
+func (m *MockRateService) GetImplementationHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error) {
+	m.logger.Info("Mock: GetImplementationHealth called")
 	return &dtos.ProviderHealthResponse{
 		Status:             "healthy",
 		TotalProviders:     0,
@@ -261,8 +261,8 @@ func (m *MockRateService) GetProviderHealth(ctx context.Context) (*dtos.Provider
 	}, nil
 }
 
-func (m *MockRateService) RefreshProviders(ctx context.Context) error {
-	m.logger.Info("Mock: RefreshProviders called")
-	m.metrics.IncrementCounter("mock_provider_refresh", map[string]string{"status": "success"})
+func (m *MockRateService) RefreshImplementations(ctx context.Context) error {
+	m.logger.Info("Mock: RefreshImplementations called")
+	m.metrics.IncrementCounter("mock_implementation_refresh", map[string]string{"status": "success"})
 	return nil
 }

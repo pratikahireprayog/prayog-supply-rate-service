@@ -19,11 +19,11 @@ var (
 	ErrPartnerAPIError     = errors.New("partner API error")
 	ErrPartnerNotSupported = errors.New("partner type not supported")
 
-	// Provider factory errors
-	ErrProviderNotFound      = errors.New("rate provider not found")
-	ErrProviderNotRegistered = errors.New("rate provider not registered")
-	ErrProviderInitFail      = errors.New("rate provider initialization failed")
-	ErrProviderHealthCheck   = errors.New("rate provider health check failed")
+	// Implementation factory errors
+	ErrImplementationNotFound      = errors.New("rate implementation not found")
+	ErrImplementationNotRegistered = errors.New("rate implementation not registered")
+	ErrImplementationInitFail      = errors.New("rate implementation initialization failed")
+	ErrImplementationHealthCheck   = errors.New("rate implementation health check failed")
 
 	// Validation errors
 	ErrInvalidRequest     = errors.New("invalid request")
@@ -95,11 +95,11 @@ const (
 	CodePartnerAPIError     ErrorCode = "PARTNER_API_ERROR"
 	CodePartnerNotSupported ErrorCode = "PARTNER_NOT_SUPPORTED"
 
-	// Provider factory error codes
-	CodeProviderNotFound      ErrorCode = "PROVIDER_NOT_FOUND"
-	CodeProviderNotRegistered ErrorCode = "PROVIDER_NOT_REGISTERED"
-	CodeProviderInitFail      ErrorCode = "PROVIDER_INIT_FAIL"
-	CodeProviderHealthCheck   ErrorCode = "PROVIDER_HEALTH_CHECK_FAIL"
+	// Implementation factory error codes
+	CodeImplementationNotFound      ErrorCode = "IMPLEMENTATION_NOT_FOUND"
+	CodeImplementationNotRegistered ErrorCode = "IMPLEMENTATION_NOT_REGISTERED"
+	CodeImplementationInitFail      ErrorCode = "IMPLEMENTATION_INIT_FAIL"
+	CodeImplementationHealthCheck   ErrorCode = "IMPLEMENTATION_HEALTH_CHECK_FAIL"
 
 	// Validation error codes
 	CodeInvalidRequest     ErrorCode = "INVALID_REQUEST"
@@ -167,14 +167,14 @@ func ErrorToCode(err error) ErrorCode {
 		return CodePartnerAPIError
 	case ErrPartnerNotSupported:
 		return CodePartnerNotSupported
-	case ErrProviderNotFound:
-		return CodeProviderNotFound
-	case ErrProviderNotRegistered:
-		return CodeProviderNotRegistered
-	case ErrProviderInitFail:
-		return CodeProviderInitFail
-	case ErrProviderHealthCheck:
-		return CodeProviderHealthCheck
+	case ErrImplementationNotFound:
+		return CodeImplementationNotFound
+	case ErrImplementationNotRegistered:
+		return CodeImplementationNotRegistered
+	case ErrImplementationInitFail:
+		return CodeImplementationInitFail
+	case ErrImplementationHealthCheck:
+		return CodeImplementationHealthCheck
 	case ErrInvalidRequest:
 		return CodeInvalidRequest
 	case ErrInvalidWeight:

@@ -193,8 +193,8 @@ func mapServiceError(err error) (int, constants.ErrorCode, string) {
 	case constants.ErrPartnerNotFound:
 		return fiber.StatusNotFound, constants.CodePartnerNotFound, "Partner not found"
 
-	case constants.ErrProviderNotFound, constants.ErrProviderNotRegistered:
-		return fiber.StatusNotFound, constants.CodeProviderNotFound, "Provider not found"
+	case constants.ErrImplementationNotFound, constants.ErrImplementationNotRegistered:
+		return fiber.StatusNotFound, constants.CodeImplementationNotFound, "Implementation not found"
 
 	case constants.ErrInvalidRequest, constants.ErrInvalidWeight, constants.ErrInvalidDistance, constants.ErrInvalidServiceType, constants.ErrInvalidDateRange, constants.ErrInvalidCurrency, constants.ErrMissingParameter:
 		return fiber.StatusBadRequest, constants.CodeInvalidRequest, constants.MessageInvalidRequest

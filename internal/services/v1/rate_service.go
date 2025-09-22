@@ -15,7 +15,7 @@ import (
 
 // RateService implements the main rate calculation service
 type RateService struct {
-	factory      interfaces.RateProviderFactory
+	factory      interfaces.RateFactory
 	partnerRepo  interfaces.PartnerRepository
 	cacheManager interfaces.CacheManager
 	logger       interfaces.Logger
@@ -30,7 +30,7 @@ type RateService struct {
 
 // NewRateService creates a new rate service instance
 func NewRateService(
-	factory interfaces.RateProviderFactory,
+	factory interfaces.RateFactory,
 	partnerRepo interfaces.PartnerRepository,
 	cacheManager interfaces.CacheManager,
 	logger interfaces.Logger,
@@ -49,7 +49,7 @@ func NewRateService(
 	}
 }
 
-// CalculateRates calculates rates from all available providers
+// CalculateRates calculates rates from all available implementations
 func (s *RateService) CalculateRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error) {
 	startTime := time.Now()
 
@@ -101,7 +101,7 @@ func (s *RateService) CalculateRates(ctx context.Context, request *dtos.RateCalc
 	}
 
 	// Calculate rates concurrently
-	quotes, providerErrors := s.calculateRatesConcurrently(ctx, request, partners)
+	quotes, implementationErrors := s.calculateRatesConcurrently(ctx, request, partners)
 
 	// Build response
 	response := &dtos.RateCalculationResponse{
@@ -113,7 +113,7 @@ func (s *RateService) CalculateRates(ctx context.Context, request *dtos.RateCalc
 		ResponseTime: time.Since(startTime).Milliseconds(),
 		CacheHit:     cacheHit,
 		Timestamp:    time.Now(),
-		Errors:       providerErrors,
+		Errors:       implementationErrors,
 	}
 
 	// Set best quote
@@ -147,14 +147,14 @@ func (s *RateService) CalculateRates(ctx context.Context, request *dtos.RateCalc
 	s.logger.Info("Rate calculation completed",
 		"request_id", request.RequestID,
 		"total_quotes", response.TotalQuotes,
-		"errors", len(providerErrors),
+		"errors", len(implementationErrors),
 		"duration_ms", response.ResponseTime)
 
 	return response, nil
 }
 
-// CalculateRatesByProvider calculates rates from a specific provider
-func (s *RateService) CalculateRatesByProvider(ctx context.Context, request *dtos.RateCalculationRequest, providerID string) (*dtos.RateCalculationResponse, error) {
+// CalculateRatesByProvider calculates rates from a specific implementation
+func (s *RateService) CalculateRatesByImplementation(ctx context.Context, request *dtos.RateCalculationRequest, implementationID string) (*dtos.RateCalculationResponse, error) {
 	startTime := time.Now()
 
 	// Validate request
@@ -162,23 +162,23 @@ func (s *RateService) CalculateRatesByProvider(ctx context.Context, request *dto
 		return nil, fmt.Errorf("request validation failed: %w", err)
 	}
 
-	// Get provider instance
-	provider, err := s.factory.GetProviderInstance(providerID)
+	// Get implementation instance
+	implementation, err := s.factory.GetImplementationInstance(implementationID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get provider %s: %w", providerID, err)
+		return nil, fmt.Errorf("failed to get implementation %s: %w", implementationID, err)
 	}
 
 	// Calculate rates
-	providerResponse, err := provider.GetRates(ctx, request)
+	implementationResponse, err := implementation.GetRates(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("provider %s failed to calculate rates: %w", providerID, err)
+		return nil, fmt.Errorf("implementation %s failed to calculate rates: %w", implementationID, err)
 	}
 
-	providerResponse.ResponseTime = time.Since(startTime).Milliseconds()
-	return providerResponse, nil
+	implementationResponse.ResponseTime = time.Since(startTime).Milliseconds()
+	return implementationResponse, nil
 }
 
-// GetBestRate returns the best rate from all available providers
+// GetBestRate returns the best rate from all available implementations
 func (s *RateService) GetBestRate(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateQuote, error) {
 	response, err := s.CalculateRates(ctx, request)
 	if err != nil {
@@ -192,7 +192,7 @@ func (s *RateService) GetBestRate(ctx context.Context, request *dtos.RateCalcula
 	return response.BestQuote, nil
 }
 
-// CompareRates compares rates from multiple providers
+// CompareRates compares rates from multiple implementations
 func (s *RateService) CompareRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateComparisonResponse, error) {
 	// Convert to comparison request
 	comparisonRequest := &dtos.RateComparisonRequest{
@@ -205,21 +205,21 @@ func (s *RateService) CompareRates(ctx context.Context, request *dtos.RateCalcul
 	return s.compareRatesWithOptions(ctx, comparisonRequest)
 }
 
-// GetProviderHealth returns health status of all providers
+// GetProviderHealth returns health status of all implementations
 func (s *RateService) GetProviderHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error) {
 	startTime := time.Now()
 
-	// Get all provider instances
+	// Get all implementation instances
 	instances := s.factory.GetAllInstances()
 
 	// Perform health checks
 	healthResults := s.factory.HealthCheckAll(ctx)
 
 	// Build response
-	providerStatuses := make([]dtos.ProviderHealthStatus, 0, len(instances))
+	implementationStatuses := make([]dtos.ProviderHealthStatus, 0, len(instances))
 	healthyCount := 0
 
-	for partnerID, provider := range instances {
+	for partnerID, implementation := range instances {
 		err := healthResults[partnerID]
 		isHealthy := err == nil
 		if isHealthy {
@@ -228,8 +228,8 @@ func (s *RateService) GetProviderHealth(ctx context.Context) (*dtos.ProviderHeal
 
 		status := dtos.ProviderHealthStatus{
 			PartnerID:    partnerID,
-			PartnerName:  provider.GetProviderName(),
-			ProviderType: provider.GetProviderType(),
+			PartnerName:  implementation.GetImplementationName(),
+			ProviderType: implementation.GetImplementationType(),
 			Status:       s.getHealthStatusString(isHealthy),
 			IsActive:     true,
 			LastChecked:  time.Now(),
@@ -240,7 +240,7 @@ func (s *RateService) GetProviderHealth(ctx context.Context) (*dtos.ProviderHeal
 			status.ErrorMessage = err.Error()
 		}
 
-		providerStatuses = append(providerStatuses, status)
+		implementationStatuses = append(implementationStatuses, status)
 	}
 
 	overallStatus := "healthy"
@@ -255,7 +255,7 @@ func (s *RateService) GetProviderHealth(ctx context.Context) (*dtos.ProviderHeal
 		TotalProviders:     len(instances),
 		HealthyProviders:   healthyCount,
 		UnhealthyProviders: len(instances) - healthyCount,
-		Providers:          providerStatuses,
+		Providers:          implementationStatuses,
 		CheckedAt:          time.Now(),
 		ResponseTime:       time.Since(startTime).Milliseconds(),
 	}
@@ -263,9 +263,9 @@ func (s *RateService) GetProviderHealth(ctx context.Context) (*dtos.ProviderHeal
 	return response, nil
 }
 
-// RefreshProviders refreshes all provider configurations
+// RefreshProviders refreshes all implementation configurations
 func (s *RateService) RefreshProviders(ctx context.Context) error {
-	s.logger.Info("Starting provider refresh")
+	s.logger.Info("Starting implementation refresh")
 
 	// Get all active partners
 	partners, err := s.partnerRepo.GetActive(ctx)
@@ -276,19 +276,19 @@ func (s *RateService) RefreshProviders(ctx context.Context) error {
 	var refreshErrors []error
 
 	for _, partner := range partners {
-		// Try to get existing provider instance
-		provider, err := s.factory.GetProviderInstance(partner.ID.String())
+		// Try to get existing implementation instance
+		implementation, err := s.factory.GetImplementationInstance(partner.ID.String())
 		if err != nil {
-			// Provider doesn't exist, create new one
-			_, err := s.factory.CreateProvider(dtos.ProviderType(partner.Type), partner.ID.String())
+			// Implementation doesn't exist, create new one
+			_, err := s.factory.CreateImplementation(dtos.ProviderType(partner.Type), partner.ID.String())
 			if err != nil {
-				refreshErrors = append(refreshErrors, fmt.Errorf("failed to create provider for partner %s: %w", partner.ID, err))
+				refreshErrors = append(refreshErrors, fmt.Errorf("failed to create implementation for partner %s: %w", partner.ID, err))
 				continue
 			}
 		} else {
-			// Reinitialize existing provider
-			if err := provider.Initialize(partner.Config); err != nil {
-				refreshErrors = append(refreshErrors, fmt.Errorf("failed to reinitialize provider for partner %s: %w", partner.ID, err))
+			// Reinitialize existing implementation
+			if err := implementation.Initialize(partner.Config); err != nil {
+				refreshErrors = append(refreshErrors, fmt.Errorf("failed to reinitialize implementation for partner %s: %w", partner.ID, err))
 			}
 		}
 	}
@@ -298,7 +298,7 @@ func (s *RateService) RefreshProviders(ctx context.Context) error {
 		"errors", len(refreshErrors))
 
 	if len(refreshErrors) > 0 {
-		return fmt.Errorf("provider refresh completed with errors: %v", refreshErrors)
+		return fmt.Errorf("implementation refresh completed with errors: %v", refreshErrors)
 	}
 
 	return nil
@@ -329,7 +329,7 @@ func (s *RateService) getActivePartners(ctx context.Context, request *dtos.RateC
 		return nil, err
 	}
 
-	// Filter by provider types if specified
+	// Filter by implementation types if specified
 	if len(request.ProviderTypes) > 0 {
 		var filteredPartners []*models.Partner
 		typeMap := make(map[string]bool)
@@ -415,13 +415,13 @@ func (s *RateService) calculateRateForPartner(ctx context.Context, request *dtos
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	// Get or create provider
-	provider, err := s.factory.CreateProvider(dtos.ProviderType(partner.Type), partner.ID.String())
+	// Get or create implementation
+	implementation, err := s.factory.CreateImplementation(dtos.ProviderType(partner.Type), partner.ID.String())
 	if err != nil {
 		errorChan <- dtos.ProviderError{
 			PartnerID:    partner.ID.String(),
 			PartnerName:  partner.Name,
-			ErrorCode:    string(constants.CodeProviderInitFail),
+			ErrorCode:    string(constants.CodeImplementationInitFail),
 			ErrorMessage: err.Error(),
 			Timestamp:    time.Now(),
 		}
@@ -429,7 +429,7 @@ func (s *RateService) calculateRateForPartner(ctx context.Context, request *dtos
 	}
 
 	// Calculate rates
-	response, err := provider.GetRates(timeoutCtx, request)
+	response, err := implementation.GetRates(timeoutCtx, request)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -447,7 +447,7 @@ func (s *RateService) calculateRateForPartner(ctx context.Context, request *dtos
 			Timestamp:    time.Now(),
 		}
 
-		s.metrics.IncrementCounter("provider_rate_calculation_failed", map[string]string{
+		s.metrics.IncrementCounter("implementation_rate_calculation_failed", map[string]string{
 			"partner_id": partner.ID.String(),
 		})
 		return
@@ -459,10 +459,10 @@ func (s *RateService) calculateRateForPartner(ctx context.Context, request *dtos
 		quoteChan <- quote
 	}
 
-	s.metrics.IncrementCounter("provider_rate_calculation_success", map[string]string{
+	s.metrics.IncrementCounter("implementation_rate_calculation_success", map[string]string{
 		"partner_id": partner.ID.String(),
 	})
-	s.metrics.RecordTimer("provider_rate_calculation_time", duration, map[string]string{
+	s.metrics.RecordTimer("implementation_rate_calculation_time", duration, map[string]string{
 		"partner_id": partner.ID.String(),
 	})
 }
@@ -734,20 +734,20 @@ func (s *RateService) buildComparisonSummary(quotes []dtos.RateQuote) dtos.Compa
 	priceRange := s.calculatePriceRange(quotes)
 	deliveryRange := s.calculateDeliveryRange(quotes)
 
-	// Get unique provider types and service types
-	providerTypesMap := make(map[string]bool)
+	// Get unique implementation types and service types
+	implementationTypesMap := make(map[string]bool)
 	serviceTypesMap := make(map[string]bool)
 	totalConfidence := 0.0
 
 	for _, quote := range quotes {
-		providerTypesMap[string(quote.ProviderType)] = true
+		implementationTypesMap[string(quote.ProviderType)] = true
 		serviceTypesMap[quote.ServiceType] = true
 		totalConfidence += quote.Confidence
 	}
 
-	var providerTypes []string
-	for pt := range providerTypesMap {
-		providerTypes = append(providerTypes, pt)
+	var implementationTypes []string
+	for pt := range implementationTypesMap {
+		implementationTypes = append(implementationTypes, pt)
 	}
 
 	var serviceTypes []string
@@ -759,7 +759,7 @@ func (s *RateService) buildComparisonSummary(quotes []dtos.RateQuote) dtos.Compa
 		TotalQuotes:       len(quotes),
 		PriceRange:        *priceRange,
 		DeliveryRange:     *deliveryRange,
-		ProviderTypes:     providerTypes,
+		ProviderTypes:     implementationTypes,
 		ServiceTypes:      serviceTypes,
 		AverageConfidence: totalConfidence / float64(len(quotes)),
 	}

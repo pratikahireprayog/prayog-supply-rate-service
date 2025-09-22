@@ -20,30 +20,30 @@ func SetupRateRoutes(
 	// Rate calculation routes
 	rates := router.Group("/rates")
 	{
-		// POST /api/v1/rates/calculate - Calculate rates from all providers
+		// POST /rate/v1/rates/calculate - Calculate rates from all implementations
 		rates.Post("/calculate", rateHandler.CalculateRates)
 
-		// POST /api/v1/rates/quote - Get a quote (alias for calculate)
+		// POST /rate/v1/rates/quote - Get a quote (alias for calculate)
 		rates.Post("/quote", rateHandler.CalculateRates)
 
-		// POST /api/v1/rates/compare - Compare rates from multiple providers
+		// POST /rate/v1/rates/compare - Compare rates from multiple implementations
 		rates.Post("/compare", rateHandler.CompareRates)
 
-		// POST /api/v1/rates/best - Get the best rate from all providers
+		// POST /rate/v1/rates/best - Get the best rate from all implementations
 		rates.Post("/best", rateHandler.GetBestRate)
 
-		// POST /api/v1/rates/provider/:providerId - Get rates from specific provider
-		rates.Post("/provider/:providerId", rateHandler.CalculateRatesByProvider)
+		// POST /rate/v1/rates/implementation/:implementationId - Get rates from specific implementation
+		rates.Post("/implementation/:implementationId", rateHandler.CalculateRatesByImplementation)
 	}
 
-	// Provider health routes
-	providers := router.Group("/providers")
+	// Implementation health routes
+	implementations := router.Group("/implementations")
 	{
-		// GET /api/v1/providers/health - Get health status of all providers
-		providers.Get("/health", rateHandler.GetProviderHealth)
+		// GET /rate/v1/implementations/health - Get health status of all implementations
+		implementations.Get("/health", rateHandler.GetImplementationHealth)
 
-		// POST /api/v1/providers/refresh - Refresh all provider configurations
-		providers.Post("/refresh", rateHandler.RefreshProviders)
+		// POST /rate/v1/implementations/refresh - Refresh all implementation configurations
+		implementations.Post("/refresh", rateHandler.RefreshImplementations)
 	}
 
 	// Add additional route groups for future endpoints
@@ -59,7 +59,7 @@ func setupPartnerRoutes(
 ) {
 	partners := router.Group("/partners")
 	{
-		// GET /api/v1/partners - List all partners
+		// GET /rate/v1/partners - List all partners
 		partners.Get("/", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,
@@ -68,7 +68,7 @@ func setupPartnerRoutes(
 			})
 		})
 
-		// GET /api/v1/partners/:id - Get partner by ID
+		// GET /rate/v1/partners/:id - Get partner by ID
 		partners.Get("/:id", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,
@@ -77,7 +77,7 @@ func setupPartnerRoutes(
 			})
 		})
 
-		// POST /api/v1/partners - Create new partner
+		// POST /rate/v1/partners - Create new partner
 		partners.Post("/", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,
@@ -86,7 +86,7 @@ func setupPartnerRoutes(
 			})
 		})
 
-		// PUT /api/v1/partners/:id - Update partner
+		// PUT /rate/v1/partners/:id - Update partner
 		partners.Put("/:id", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,
@@ -95,7 +95,7 @@ func setupPartnerRoutes(
 			})
 		})
 
-		// DELETE /api/v1/partners/:id - Delete partner
+		// DELETE /rate/v1/partners/:id - Delete partner
 		partners.Delete("/:id", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,
@@ -114,7 +114,7 @@ func setupAdminRoutes(
 ) {
 	admin := router.Group("/admin")
 	{
-		// GET /api/v1/admin/stats - Get service statistics
+		// GET /rate/v1/admin/stats - Get service statistics
 		admin.Get("/stats", func(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"success": true,
@@ -123,16 +123,16 @@ func setupAdminRoutes(
 					"version": "1.0.0",
 					"status":  "operational",
 					"endpoints": fiber.Map{
-						"rates_calculate": "/api/v1/rates/calculate",
-						"rates_compare":   "/api/v1/rates/compare",
-						"rates_best":      "/api/v1/rates/best",
-						"provider_health": "/api/v1/providers/health",
+						"rates_calculate":       "/rate/v1/rates/calculate",
+						"rates_compare":         "/rate/v1/rates/compare",
+						"rates_best":            "/rate/v1/rates/best",
+						"implementation_health": "/rate/v1/implementations/health",
 					},
 				},
 			})
 		})
 
-		// POST /api/v1/admin/cache/clear - Clear cache
+		// POST /rate/v1/admin/cache/clear - Clear cache
 		admin.Post("/cache/clear", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,
@@ -141,7 +141,7 @@ func setupAdminRoutes(
 			})
 		})
 
-		// GET /api/v1/admin/health/deep - Deep health check
+		// GET /rate/v1/admin/health/deep - Deep health check
 		admin.Get("/health/deep", func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 				"success": false,

@@ -221,22 +221,22 @@ func (s *Server) setupMiddleware() {
 }
 
 func (s *Server) setupRoutes() {
-	// API versioning
-	api := s.app.Group("/api")
+	// Rate API with global prefix
+	rate := s.app.Group("/rate")
 
-	// Health endpoints (outside of versioning)
-	s.app.Get("/health", s.healthHandler)
+	// Health endpoints under rate prefix
+	rate.Get("/health", s.healthHandler)
 
-	// Metrics endpoint
+	// Metrics endpoint under rate prefix
 	if s.config.EnableMetrics {
-		s.app.Get("/metrics", s.metricsHandler)
+		rate.Get("/metrics", s.metricsHandler)
 	}
 
-	// API documentation
-	api.Get("/", s.apiInfoHandler)
+	// API documentation at rate root
+	rate.Get("/", s.apiInfoHandler)
 
-	// Version 1 routes
-	v1 := api.Group("/v1")
+	// Version 1 routes directly under rate
+	v1 := rate.Group("/v1")
 	routesv1.SetupRateRoutes(v1, s.rateService, s.logger, s.metrics)
 }
 
@@ -329,10 +329,10 @@ func (s *Server) healthHandler(c *fiber.Ctx) error {
 	if deep {
 		// Perform deep health checks
 		if s.rateService != nil {
-			if healthResponse, err := s.rateService.GetProviderHealth(c.Context()); err == nil {
-				healthStatus["providers"] = healthResponse
+			if healthResponse, err := s.rateService.GetImplementationHealth(c.Context()); err == nil {
+				healthStatus["implementations"] = healthResponse
 			} else {
-				healthStatus["providers"] = fiber.Map{
+				healthStatus["implementations"] = fiber.Map{
 					"status": "unhealthy",
 					"error":  err.Error(),
 				}
@@ -375,10 +375,12 @@ func (s *Server) apiInfoHandler(c *fiber.Ctx) error {
 		"description": "A microservice for calculating shipping rates from multiple logistics partners",
 		"version":     constants.APIVersionV1,
 		"endpoints": fiber.Map{
-			"health":      "/health",
-			"metrics":     "/metrics",
-			"rates_v1":    "/api/v1/rates",
-			"partners_v1": "/api/v1/partners",
+			"health":             "/rate/health",
+			"metrics":            "/rate/metrics",
+			"api_info":           "/rate/",
+			"rates_v1":           "/rate/v1/rates",
+			"implementations_v1": "/rate/v1/implementations",
+			"partners_v1":        "/rate/v1/partners",
 		},
 		"documentation": "/docs",
 		"timestamp":     time.Now(),
