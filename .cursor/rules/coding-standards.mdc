@@ -1,0 +1,230 @@
+---
+description: Go coding standards and best practices for the prayog-rate-service using Go 1.25.1 and Fiber framework
+globs: 
+alwaysApply: true
+---
+
+# Coding Standards & Best Practices
+
+## Technology Stack
+- **Go Version**: 1.25.1
+- **Web Framework**: Fiber v2
+- **Architecture**: Clean Architecture with Factory Pattern
+- **Database**: PostgreSQL with GORM
+- **Validation**: go-playground/validator
+- **Testing**: Testify framework
+
+## Go Code Standards
+
+### Package Organization
+- Each package should have a single responsibility
+- Package names should be lowercase, single words
+- Avoid generic package names like `common`, `util`, `shared` (except for our shared layer)
+
+### Error Handling
+- Always handle errors explicitly
+- Use custom error types for business logic errors
+- Wrap errors with context using `fmt.Errorf("operation failed: %w", err)`
+- Define error constants in [internal/shared/constants/v1/](mdc:internal/shared/constants/v1)
+
+### Interface Design
+- Keep interfaces small and focused (Interface Segregation Principle)
+- Define interfaces in [internal/shared/interfaces/v1/](mdc:internal/shared/interfaces/v1)
+- Use dependency injection through interfaces
+- Accept interfaces, return concrete types
+
+### Struct Design
+- Use struct tags for JSON, validation, and database mapping
+- Group related fields together
+- Use pointer receivers for methods that modify the struct
+- Use value receivers for methods that don't modify the struct
+
+### Factory Pattern Implementation
+- Use factory pattern for creating rate providers (dynamic and static)
+- Each provider should implement a common interface
+- Factory should register and manage different provider types
+- Support for runtime provider selection based on configuration
+
+```go
+// Rate provider interface
+type RateProvider interface {
+    GetRate(ctx context.Context, req *RateRequest) (*RateResponse, error)
+    GetProviderType() ProviderType
+    IsHealthy(ctx context.Context) error
+}
+
+// Factory pattern
+type RateProviderFactory struct {
+    providers map[ProviderType]RateProvider
+}
+
+func (f *RateProviderFactory) CreateProvider(providerType ProviderType) (RateProvider, error) {
+    if provider, exists := f.providers[providerType]; exists {
+        return provider, nil
+    }
+    return nil, ErrProviderNotFound
+}
+
+func (f *RateProviderFactory) RegisterProvider(provider RateProvider) {
+    f.providers[provider.GetProviderType()] = provider
+}
+```
+
+## Layer-Specific Guidelines
+
+### Models ([internal/shared/models/v1/](mdc:internal/shared/models/v1))
+```go
+type Rate struct {
+    ID        uint      `json:"id" gorm:"primaryKey"`
+    ServiceID string    `json:"service_id" gorm:"index" validate:"required"`
+    RateType  string    `json:"rate_type" validate:"required,oneof=standard premium express"`
+    Price     float64   `json:"price" validate:"required,min=0"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
+### DTOs ([internal/shared/dtos/v1/](mdc:internal/shared/dtos/v1))
+```go
+type CreateRateRequest struct {
+    ServiceID string  `json:"service_id" validate:"required"`
+    RateType  string  `json:"rate_type" validate:"required,oneof=standard premium express"`
+    Price     float64 `json:"price" validate:"required,min=0"`
+}
+
+type RateResponse struct {
+    ID        uint    `json:"id"`
+    ServiceID string  `json:"service_id"`
+    RateType  string  `json:"rate_type"`
+    Price     float64 `json:"price"`
+}
+```
+
+### Repositories ([internal/shared/repositories/v1/](mdc:internal/shared/repositories/v1))
+- Always return domain models, not database-specific types
+- Use context.Context for cancellation and timeouts
+- Handle database errors and convert to domain errors
+
+### Services ([internal/services/v1/](mdc:internal/services/v1))
+- Contain only business logic
+- Validate input using DTOs
+- Use repository interfaces, not concrete implementations
+- Return domain errors, not infrastructure errors
+
+### Fiber Handlers ([internal/infrastructure/api/http/v1/handlers/](mdc:internal/infrastructure/api/http/v1/handlers))
+- Keep handlers thin - delegate to services
+- Use Fiber's context for request/response handling
+- Validate request DTOs using struct tags
+- Return consistent response format using utility functions
+- Handle Fiber-specific errors and status codes
+
+```go
+// Example Fiber handler structure
+func (h *RateHandler) GetRate(c *fiber.Ctx) error {
+    var req dtos.RateRequest
+    if err := c.BodyParser(&req); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(utils.ErrorResponse("invalid request format", err))
+    }
+    
+    if err := h.validator.Struct(&req); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(utils.ValidationErrorResponse(err))
+    }
+    
+    rate, err := h.service.GetRate(c.Context(), &req)
+    if err != nil {
+        return utils.HandleServiceError(c, err)
+    }
+    
+    return c.Status(fiber.StatusOK).JSON(utils.SuccessResponse(rate))
+}
+```
+
+### Fiber Middleware ([internal/infrastructure/api/http/middleware/](mdc:internal/infrastructure/api/http/middleware))
+- Create reusable middleware for cross-cutting concerns
+- Use Fiber's Next() to continue the chain
+- Handle authentication, logging, CORS, rate limiting
+- Keep middleware stateless and composable
+
+```go
+// Example middleware structure
+func AuthMiddleware() fiber.Handler {
+    return func(c *fiber.Ctx) error {
+        token := c.Get("Authorization")
+        if token == "" {
+            return c.Status(fiber.StatusUnauthorized).JSON(utils.ErrorResponse("unauthorized", nil))
+        }
+        
+        // Validate token logic here
+        
+        return c.Next()
+    }
+}
+```
+
+## Testing Standards
+
+### Unit Tests
+- Test files should end with `_test.go`
+- Use table-driven tests for multiple scenarios
+- Mock external dependencies using interfaces
+- Test both success and error cases
+
+### Integration Tests
+- Place in [test/](mdc:test) directory
+- Test complete workflows end-to-end
+- Use test databases or containers
+- Clean up test data after each test
+
+## Documentation Standards
+
+### Code Comments
+- Document public functions, types, and constants
+- Explain the "why", not the "what"
+- Use complete sentences
+- Start comments with the name of the item being documented
+
+### API Documentation
+- Keep OpenAPI specs updated in [api_docs/openapi/v1/](mdc:api_docs/openapi/v1)
+- Document all endpoints, parameters, and responses
+- Include example requests and responses
+- Update protobuf definitions in [api_docs/proto/v1/](mdc:api_docs/proto/v1)
+
+## Security Guidelines
+
+### Input Validation
+- Validate all input at the handler level
+- Use struct tags for validation rules
+- Sanitize user input to prevent injection attacks
+- Implement rate limiting for public endpoints
+
+### Authentication & Authorization
+- Implement auth middleware in [internal/infrastructure/api/http/middleware/](mdc:internal/infrastructure/api/http/middleware)
+- Use JWT tokens for stateless authentication
+- Implement role-based access control
+- Log security events
+
+### Data Protection
+- Never log sensitive data (passwords, tokens, PII)
+- Use environment variables for secrets
+- Implement proper CORS policies
+- Use HTTPS in production
+
+## Performance Guidelines
+
+### Database Optimization
+- Use database indexes appropriately
+- Implement pagination for list endpoints
+- Use database transactions for multi-step operations
+- Avoid N+1 query problems
+
+### Caching
+- Cache frequently accessed data
+- Use appropriate cache invalidation strategies
+- Implement cache warming for critical data
+- Monitor cache hit rates
+
+### Monitoring
+- Add structured logging throughout the application
+- Implement health check endpoints
+- Use metrics for monitoring performance
+- Set up alerts for critical errors
