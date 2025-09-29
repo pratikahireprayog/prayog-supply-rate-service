@@ -10,6 +10,7 @@ This document provides comprehensive CURL examples for all APIs available in the
 ## 📋 Table of Contents
 1. [Health Check APIs](#health-check-apis)
 2. [Quote APIs](#quote-apis) 
+   - [Standardized Response Structure](#5-multi-partner-request-with-success-and-failure-examples)
 3. [Metrics & Monitoring](#metrics--monitoring)
 4. [API Information](#api-information)
 5. [Error Scenarios](#error-scenarios)
@@ -111,6 +112,8 @@ curl -X GET "http://localhost:9046/supply-rate/health?deep=true" \
 ---
 
 ## 📦 Quote APIs
+
+> **Note**: All quote endpoints use the standardized response structure shown in [section 5](#5-multi-partner-request-with-success-and-failure-examples) below. This structure consistently separates successful responses from failed responses and provides comprehensive metadata about each request.
 
 ### 1. Get Quotes - Unified Rate Service (Pre-defined)
 **Endpoint**: `POST /supply-rate/v1/quotes`  
@@ -435,7 +438,138 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
   }'
 ```
 
-### 5. Bulk Quote Request (Multiple Packages)
+### 5. Multi-Partner Request with Success and Failure Examples
+**Endpoint**: `POST /supply-rate/v1/quotes`  
+**Purpose**: Get rates from multiple partners showing both successful and failed responses
+
+```bash
+curl -X POST http://localhost:9046/supply-rate/v1/quotes \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: req-$(uuidgen)" \
+  -d '{
+    "source_location": {
+      "postal_code": "560001",
+      "country_code": "IN"
+    },
+    "destination_location": {
+      "postal_code": "110001",
+      "country_code": "IN"
+    },
+    "packages": [
+      {
+        "weight": {
+          "value": 1.5,
+          "unit": "kg"
+        },
+        "dimensions": {
+          "length": 20.0,
+          "width": 15.0,
+          "height": 10.0,
+          "unit": "cm"
+        }
+      }
+    ],
+    "partners": [
+      {
+        "id": "",
+        "code": "dhl"
+      },
+      {
+        "id": "",
+        "code": "delhivery"
+      },
+      {
+        "id": "",
+        "code": "fedex"
+      }
+    ],
+    "metadata": {
+      "currency": "INR",
+      "service_type": "standard"
+    }
+  }'
+```
+
+**Generic Standardized Response Structure:**
+```json
+{
+  "success": true,
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
+    "request_id": "req-a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "timestamp": "2025-09-30T02:20:00Z",
+    "response_time_ms": 1450,
+    "partners_queried": 3,
+    "partners_succeeded": 2,
+    "partners_failed": 1,
+    "total_rates_found": 3
+  },
+  "data": {
+    "successful_responses": [
+      {
+        "partner": {
+          "code": "dhl",
+          "name": "DHL Express"
+        },
+        "source": "real_time",
+        "available_rates": [
+          {
+            "rate_id": "dhl-express-worldwide-123",
+            "service": "EXPRESS WORLDWIDE",
+            "price": {
+              "currency": "INR",
+              "amount": 15724.80,
+              "type": "real_time_international"
+            }
+          },
+          {
+            "rate_id": "dhl-economy-select-456",
+            "service": "ECONOMY SELECT",
+            "price": {
+              "currency": "INR",
+              "amount": 12500.00,
+              "type": "real_time_international"
+            }
+          }
+        ]
+      },
+      {
+        "partner": {
+          "code": "delhivery",
+          "name": "Delhivery"
+        },
+        "source": "pre_defined",
+        "available_rates": [
+          {
+            "rate_id": "del-surface-standard-789",
+            "service": "Surface Standard",
+            "price": {
+              "currency": "INR",
+              "amount": 150.00,
+              "type": "weight_distance_based"
+            }
+          }
+        ]
+      }
+    ],
+    "failed_responses": [
+      {
+        "partner": {
+          "code": "fedex",
+          "name": "FedEx"
+        },
+        "source": "real_time",
+        "error": {
+          "code": "PARTNER_TIMEOUT",
+          "message": "The request to the partner API timed out after 3000ms."
+        }
+      }
+    ]
+  }
+}
+```
+
+### 6. Bulk Quote Request (Multiple Packages)
 **Endpoint**: `POST /supply-rate/v1/quotes`  
 **Purpose**: Get rates for multiple packages in one request
 
