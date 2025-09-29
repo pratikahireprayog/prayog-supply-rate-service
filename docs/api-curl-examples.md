@@ -210,16 +210,24 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 ```json
 {
   "success": true,
-  "message": "Operation completed successfully",
-  "data": {
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
     "request_id": "req-12345-67890",
-    "partner_rates": [
+    "timestamp": "2025-09-29T10:30:00Z",
+    "response_time_ms": 950,
+    "partners_queried": 1,
+    "partners_succeeded": 1,
+    "partners_failed": 0,
+    "total_rates_found": 1
+  },
+  "data": {
+    "successful_responses": [
       {
         "partner": {
-          "id": "",
-          "code": "unified"
+          "code": "unified",
+          "name": "Unified Rate"
         },
-        "success": true,
+        "source": "pre_defined",
         "available_rates": [
           {
             "rate_id": "unified_standard_001",
@@ -237,21 +245,10 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
             "delivery_days": 2
           }
         ],
-        "data_source": "pre_defined",
         "response_time_ms": 850
       }
     ],
-    "summary": {
-      "total_partners": 1,
-      "successful_partners": 1,
-      "total_rates_found": 1
-    },
-    "retrieved_at": "2025-09-29T10:30:00Z"
-  },
-  "meta": {
-    "request_id": "req-12345-67890",
-    "response_time_ms": 950,
-    "version": "v1"
+    "failed_responses": []
   },
   "timestamp": "2025-09-29T10:30:00Z"
 }
@@ -305,16 +302,24 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 ```json
 {
   "success": true,
-  "message": "Operation completed successfully",
-  "data": {
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
     "request_id": "req-dhl-12345",
-    "partner_rates": [
+    "timestamp": "2025-09-29T10:30:00Z",
+    "response_time_ms": 1350,
+    "partners_queried": 1,
+    "partners_succeeded": 1,
+    "partners_failed": 0,
+    "total_rates_found": 1
+  },
+  "data": {
+    "successful_responses": [
       {
         "partner": {
-          "id": "",
-          "code": "dhl"
+          "code": "dhl",
+          "name": "DHL Express"
         },
-        "success": true,
+        "source": "real_time",
         "available_rates": [
           {
             "rate_id": "dhl_p_0",
@@ -333,21 +338,10 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
             "delivery_days": 7
           }
         ],
-        "data_source": "real_time",
         "response_time_ms": 1250
       }
     ],
-    "summary": {
-      "total_partners": 1,
-      "successful_partners": 1,
-      "total_rates_found": 1
-    },
-    "retrieved_at": "2025-09-29T10:30:00Z"
-  },
-  "meta": {
-    "request_id": "req-dhl-12345",
-    "response_time_ms": 1350,
-    "version": "v1"
+    "failed_responses": []
   },
   "timestamp": "2025-09-29T10:30:00Z"
 }
@@ -631,33 +625,34 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 ```json
 {
   "success": true,
-  "message": "Operation completed successfully",
-  "data": {
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
     "request_id": "req-error-456",
-    "partner_rates": [
+    "timestamp": "2025-09-29T10:30:00Z",
+    "response_time_ms": 15,
+    "partners_queried": 1,
+    "partners_succeeded": 0,
+    "partners_failed": 1,
+    "total_rates_found": 0
+  },
+  "data": {
+    "successful_responses": [],
+    "failed_responses": [
       {
         "partner": {
-          "id": "",
-          "code": "unknown_partner"
+          "code": "unknown_partner",
+          "name": "Unknown Partner"
         },
-        "success": false,
-        "available_rates": [],
+        "source": "unknown",
         "error": {
           "code": "PARTNER_NOT_FOUND",
           "message": "Partner implementation not found",
           "details": "No implementation found for partner code: unknown_partner"
-        },
-        "data_source": "",
-        "response_time_ms": 5
+        }
       }
-    ],
-    "summary": {
-      "total_partners": 1,
-      "successful_partners": 0,
-      "total_rates_found": 0
-    },
-    "retrieved_at": "2025-09-29T10:30:00Z"
-  }
+    ]
+  },
+  "timestamp": "2025-09-29T10:30:00Z"
 }
 ```
 
@@ -696,25 +691,35 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 **Expected Error Response:**
 ```json
 {
+  "success": true,
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
+    "request_id": "req-error-789",
+    "timestamp": "2025-09-29T10:30:00Z",
+    "response_time_ms": 520,
+    "partners_queried": 1,
+    "partners_succeeded": 0,
+    "partners_failed": 1,
+    "total_rates_found": 0
+  },
   "data": {
-    "partner_rates": [
+    "successful_responses": [],
+    "failed_responses": [
       {
         "partner": {
-          "id": "",
-          "code": "dhl"
+          "code": "dhl",
+          "name": "DHL Express"
         },
-        "success": false,
-        "available_rates": [],
+        "source": "real_time",
         "error": {
           "code": "RATE_FETCH_FAILED",
           "message": "Failed to fetch rates from partner",
           "details": "DHL API returned status 400: Invalid postal code"
-        },
-        "data_source": "real_time",
-        "response_time_ms": 500
+        }
       }
     ]
-  }
+  },
+  "timestamp": "2025-09-29T10:30:00Z"
 }
 ```
 

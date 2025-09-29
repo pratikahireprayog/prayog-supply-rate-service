@@ -486,19 +486,27 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 ```json
 {
   "success": true,
-  "message": "Rates retrieved successfully",
-  "data": {
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
     "request_id": "req-123e4567-e89b-12d3-a456-426614174000",
-    "partner_rates": [
+    "timestamp": "2024-01-15T10:30:00Z",
+    "response_time_ms": 120,
+    "partners_queried": 1,
+    "partners_succeeded": 1,
+    "partners_failed": 0,
+    "total_rates_found": 1
+  },
+  "data": {
+    "successful_responses": [
       {
         "partner": {
-          "id": "partner-1",
-          "code": "DELHIVERY"
+          "code": "delhivery",
+          "name": "Delhivery"
         },
-        "success": true,
+        "source": "pre_defined",
         "available_rates": [
           {
-            "rate_id": "DEL-STD-001",
+            "rate_id": "del-surface-standard-001",
             "service": "Surface Delivery",
             "price": {
               "currency": "INR",
@@ -512,21 +520,10 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
             "delivery_days": 3
           }
         ],
-        "data_source": "pre_defined",
         "response_time_ms": 45
       }
     ],
-    "summary": {
-      "total_partners": 1,
-      "successful_partners": 1,
-      "total_rates_found": 1
-    },
-    "retrieved_at": "2024-01-15T10:30:00Z"
-  },
-  "meta": {
-    "request_id": "req-123e4567-e89b-12d3-a456-426614174000",
-    "response_time_ms": 120,
-    "version": "v1"
+    "failed_responses": []
   },
   "timestamp": "2024-01-15T10:30:00Z"
 }
@@ -556,36 +553,132 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 ### DHL (Complex international)
 ```json
 {
-  "rate_id": "DHL-EWW-001",
-  "service": "EXPRESS WORLDWIDE",
-  "price": {
-    "currency": "INR",
-    "amount": 15724.8,
-    "type": "product_based",
-    "criteria": {
-      "weight": "15 kg",
-      "route": "international"
-    }
+  "success": true,
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
+    "request_id": "req-a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "timestamp": "2025-09-30T02:20:00Z",
+    "response_time_ms": 1450,
+    "partners_queried": 1,
+    "partners_succeeded": 1,
+    "partners_failed": 0,
+    "total_rates_found": 2
   },
-  "delivery_days": 7
+  "data": {
+    "successful_responses": [
+      {
+        "partner": {
+          "code": "dhl",
+          "name": "DHL Express"
+        },
+        "source": "real_time",
+        "available_rates": [
+          {
+            "rate_id": "dhl-express-worldwide-123",
+            "service": "EXPRESS WORLDWIDE",
+            "price": {
+              "currency": "INR",
+              "amount": 15724.80,
+              "type": "real_time_international"
+            },
+            "delivery_days": 7
+          },
+          {
+            "rate_id": "dhl-economy-select-456",
+            "service": "ECONOMY SELECT",
+            "price": {
+              "currency": "INR",
+              "amount": 12500.00,
+              "type": "real_time_international"
+            },
+            "delivery_days": 10
+          }
+        ],
+        "response_time_ms": 1250
+      }
+    ],
+    "failed_responses": []
+  },
+  "timestamp": "2025-09-30T02:20:00Z"
 }
 ```
 
-### Delhivery (Weight + Distance)
+### Multi-Partner Response with Success and Failure
 ```json
 {
-  "rate_id": "DEL-STD-001",
-  "service": "Surface Delivery",
-  "price": {
-    "currency": "INR",
-    "amount": 75.50,
-    "type": "weight_distance_based",
-    "criteria": {
-      "weight_range": "0-5 kg",
-      "distance_range": "100-500 km"
-    }
+  "success": true,
+  "message": "Rate quotes retrieved successfully.",
+  "metadata": {
+    "request_id": "req-a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "timestamp": "2025-09-30T02:20:00Z",
+    "response_time_ms": 1450,
+    "partners_queried": 3,
+    "partners_succeeded": 2,
+    "partners_failed": 1,
+    "total_rates_found": 3
   },
-  "delivery_days": 3
+  "data": {
+    "successful_responses": [
+      {
+        "partner": {
+          "code": "dhl",
+          "name": "DHL Express"
+        },
+        "source": "real_time",
+        "available_rates": [
+          {
+            "rate_id": "dhl-express-worldwide-123",
+            "service": "EXPRESS WORLDWIDE",
+            "price": {
+              "currency": "INR",
+              "amount": 15724.80,
+              "type": "real_time_international"
+            }
+          },
+          {
+            "rate_id": "dhl-economy-select-456",
+            "service": "ECONOMY SELECT",
+            "price": {
+              "currency": "INR",
+              "amount": 12500.00,
+              "type": "real_time_international"
+            }
+          }
+        ]
+      },
+      {
+        "partner": {
+          "code": "delhivery",
+          "name": "Delhivery"
+        },
+        "source": "pre_defined",
+        "available_rates": [
+          {
+            "rate_id": "del-surface-standard-789",
+            "service": "Surface Standard",
+            "price": {
+              "currency": "INR",
+              "amount": 150.00,
+              "type": "weight_distance_based"
+            }
+          }
+        ]
+      }
+    ],
+    "failed_responses": [
+      {
+        "partner": {
+          "code": "fedex",
+          "name": "FedEx"
+        },
+        "source": "real_time",
+        "error": {
+          "code": "PARTNER_TIMEOUT",
+          "message": "The request to the partner API timed out after 3000ms."
+        }
+      }
+    ]
+  }
 }
 ```
 

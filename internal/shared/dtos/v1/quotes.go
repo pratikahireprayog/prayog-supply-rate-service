@@ -47,28 +47,50 @@ type Partner struct {
 	Code string `json:"code" validate:"required"`
 }
 
-// QuoteResponse represents the response from quote request
+// QuoteResponse represents the standardized response from quote request
 type QuoteResponse struct {
-	RequestID    string              `json:"request_id"`
-	PartnerRates []PartnerRateResult `json:"partner_rates"`
-	Summary      QuoteSummary        `json:"summary"`
-	RetrievedAt  time.Time           `json:"retrieved_at"`
+	Success   bool              `json:"success"`
+	Message   string            `json:"message"`
+	Metadata  QuoteResponseMeta `json:"metadata"`
+	Data      QuoteResponseData `json:"data"`
+	Timestamp time.Time         `json:"timestamp"`
 }
 
-// PartnerRateResult represents rates from a single partner
-type PartnerRateResult struct {
+// QuoteResponseMeta represents metadata about the quote request
+type QuoteResponseMeta struct {
+	RequestID         string `json:"request_id"`
+	ResponseTimeMs    int64  `json:"response_time_ms"`
+	PartnersQueried   int    `json:"partners_queried"`
+	PartnersSucceeded int    `json:"partners_succeeded"`
+	PartnersFailed    int    `json:"partners_failed"`
+	TotalRatesFound   int    `json:"total_rates_found"`
+}
+
+// QuoteResponseData represents the data section of quote response
+type QuoteResponseData struct {
+	SuccessfulResponses []SuccessfulPartnerResponse `json:"successful_responses"`
+	FailedResponses     []FailedPartnerResponse     `json:"failed_responses"`
+}
+
+// SuccessfulPartnerResponse represents successful rates from a partner
+type SuccessfulPartnerResponse struct {
 	Partner        PartnerInfo `json:"partner"`
-	Success        bool        `json:"success"`
-	AvailableRates []Rate      `json:"available_rates,omitempty"`
-	Error          *RateError  `json:"error,omitempty"`
-	DataSource     string      `json:"data_source"` // "pre_defined" or "real_time"
-	ResponseTimeMs int64       `json:"response_time_ms"`
+	Source         string      `json:"source"` // "pre_defined" or "real_time"
+	AvailableRates []Rate      `json:"available_rates"`
+	ResponseTimeMs *int64      `json:"response_time_ms,omitempty"`
 }
 
-// PartnerInfo represents partner information
+// FailedPartnerResponse represents failed response from a partner
+type FailedPartnerResponse struct {
+	Partner PartnerInfo `json:"partner"`
+	Source  string      `json:"source"` // "pre_defined" or "real_time"
+	Error   RateError   `json:"error"`
+}
+
+// PartnerInfo represents partner information with code and name
 type PartnerInfo struct {
-	ID   string `json:"id"`
 	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 // Rate represents a single rate quote
@@ -94,9 +116,23 @@ type RateError struct {
 	Details string `json:"details,omitempty"`
 }
 
-// QuoteSummary represents summary of quote results
+// Legacy structures for backward compatibility (DEPRECATED - will be removed in v2)
 type QuoteSummary struct {
 	TotalPartners      int `json:"total_partners"`
 	SuccessfulPartners int `json:"successful_partners"`
 	TotalRatesFound    int `json:"total_rates_found"`
+}
+
+type PartnerRateResult struct {
+	Partner        LegacyPartnerInfo `json:"partner"`
+	Success        bool              `json:"success"`
+	AvailableRates []Rate            `json:"available_rates,omitempty"`
+	Error          *RateError        `json:"error,omitempty"`
+	DataSource     string            `json:"data_source"`
+	ResponseTimeMs int64             `json:"response_time_ms"`
+}
+
+type LegacyPartnerInfo struct {
+	ID   string `json:"id"`
+	Code string `json:"code"`
 }

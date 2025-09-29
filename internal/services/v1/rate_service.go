@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -780,15 +781,12 @@ func (s *RateService) getHealthStatusString(isHealthy bool) string {
 	return "unhealthy"
 }
 
-// GetQuotes retrieves quotes from multiple partners
+// GetQuotes retrieves quotes from multiple partners with standardized response structure
 func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest, requestID string) (*dtos.QuoteResponse, error) {
 	startTime := time.Now()
 
-	response := &dtos.QuoteResponse{
-		RequestID:    requestID,
-		PartnerRates: make([]dtos.PartnerRateResult, 0, len(request.Partners)),
-		RetrievedAt:  startTime,
-	}
+	var successfulResponses []dtos.SuccessfulPartnerResponse
+	var failedResponses []dtos.FailedPartnerResponse
 
 	// Process each partner
 	for _, partner := range request.Partners {
@@ -796,14 +794,11 @@ func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest,
 
 		// Normalize partner code
 		normalizedCode := utils.NormalizePartnerCode(partner.Code)
+		partnerName := s.getPartnerName(normalizedCode)
 
-		partnerResult := dtos.PartnerRateResult{
-			Partner: dtos.PartnerInfo{
-				ID:   partner.ID,
-				Code: normalizedCode, // Use normalized code
-			},
-			Success:        false,
-			AvailableRates: []dtos.Rate{},
+		partnerInfo := dtos.PartnerInfo{
+			Code: normalizedCode,
+			Name: partnerName,
 		}
 
 		// Use partner.ID if provided, otherwise use normalized code
@@ -818,15 +813,23 @@ func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest,
 			// Try to create implementation based on partner code
 			implementation, err = s.createImplementationByCode(normalizedCode)
 			if err != nil {
-				partnerResult.Error = &dtos.RateError{
-					Code:    "PARTNER_NOT_FOUND",
-					Message: "Partner implementation not found",
-					Details: fmt.Sprintf("No implementation found for partner code: %s", normalizedCode),
-				}
-				partnerResult.ResponseTimeMs = time.Since(partnerStartTime).Milliseconds()
-				response.PartnerRates = append(response.PartnerRates, partnerResult)
+				failedResponses = append(failedResponses, dtos.FailedPartnerResponse{
+					Partner: partnerInfo,
+					Source:  "unknown",
+					Error: dtos.RateError{
+						Code:    "PARTNER_NOT_FOUND",
+						Message: "Partner implementation not found",
+						Details: fmt.Sprintf("No implementation found for partner code: %s", normalizedCode),
+					},
+				})
 				continue
 			}
+		}
+
+		// Determine source type
+		source := "real_time"
+		if implementation.GetImplementationType() == dtos.ProviderTypePreDefined {
+			source = "pre_defined"
 		}
 
 		// Convert request to internal format
@@ -834,31 +837,55 @@ func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest,
 
 		// Get rates from implementation
 		rateResponse, err := implementation.GetRates(ctx, internalRequest)
+		responseTimeMs := time.Since(partnerStartTime).Milliseconds()
+
 		if err != nil {
-			partnerResult.Error = &dtos.RateError{
-				Code:    "RATE_FETCH_FAILED",
-				Message: "Failed to fetch rates from partner",
-				Details: err.Error(),
-			}
+			failedResponses = append(failedResponses, dtos.FailedPartnerResponse{
+				Partner: partnerInfo,
+				Source:  source,
+				Error: dtos.RateError{
+					Code:    "RATE_FETCH_FAILED",
+					Message: "Failed to fetch rates from partner",
+					Details: err.Error(),
+				},
+			})
 		} else {
 			// Convert response to simplified format
-			partnerResult.AvailableRates = s.convertRateResponseToRates(rateResponse)
-			partnerResult.Success = true
+			availableRates := s.convertRateResponseToRates(rateResponse)
+			successfulResponses = append(successfulResponses, dtos.SuccessfulPartnerResponse{
+				Partner:        partnerInfo,
+				Source:         source,
+				AvailableRates: availableRates,
+				ResponseTimeMs: &responseTimeMs,
+			})
 		}
-
-		// Set data source based on implementation type
-		if implementation.GetImplementationType() == dtos.ProviderTypePreDefined {
-			partnerResult.DataSource = "pre_defined"
-		} else {
-			partnerResult.DataSource = "real_time"
-		}
-
-		partnerResult.ResponseTimeMs = time.Since(partnerStartTime).Milliseconds()
-		response.PartnerRates = append(response.PartnerRates, partnerResult)
 	}
 
-	// Calculate summary
-	response.Summary = s.calculateQuoteSummary(response.PartnerRates)
+	// Calculate metadata
+	totalResponseTime := time.Since(startTime).Milliseconds()
+	totalRatesFound := 0
+	for _, successful := range successfulResponses {
+		totalRatesFound += len(successful.AvailableRates)
+	}
+
+	// Build standardized response
+	response := &dtos.QuoteResponse{
+		Success: true,
+		Message: "Rate quotes retrieved successfully.",
+		Metadata: dtos.QuoteResponseMeta{
+			RequestID:         requestID,
+			ResponseTimeMs:    totalResponseTime,
+			PartnersQueried:   len(request.Partners),
+			PartnersSucceeded: len(successfulResponses),
+			PartnersFailed:    len(failedResponses),
+			TotalRatesFound:   totalRatesFound,
+		},
+		Data: dtos.QuoteResponseData{
+			SuccessfulResponses: successfulResponses,
+			FailedResponses:     failedResponses,
+		},
+		Timestamp: time.Now(),
+	}
 
 	return response, nil
 }
@@ -939,6 +966,29 @@ func (s *RateService) calculateQuoteSummary(partnerRates []dtos.PartnerRateResul
 	}
 
 	return summary
+}
+
+// getPartnerName returns the display name for a partner code
+func (s *RateService) getPartnerName(partnerCode string) string {
+	partnerNames := map[string]string{
+		"dhl":       "DHL Express",
+		"fedex":     "FedEx",
+		"ups":       "UPS",
+		"blue_dart": "Blue Dart",
+		"delhivery": "Delhivery",
+		"porter":    "Porter",
+		"unified":   "Unified Rate",
+		"prayog":    "Prayog Unified Rate",
+		"dunzo":     "Dunzo",
+		"aramex":    "Aramex",
+	}
+
+	if name, exists := partnerNames[partnerCode]; exists {
+		return name
+	}
+
+	// Return a capitalized version of the code if not found
+	return strings.Title(strings.Replace(partnerCode, "_", " ", -1))
 }
 
 // createImplementationByCode creates implementation based on partner code
