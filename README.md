@@ -183,7 +183,7 @@ watch -n 2 'curl -s http://localhost:8080/supply-rate/health | jq'
 - `POST /supply-rate/v1/rates/implementation/:implementationId` - Get rates from specific implementation
 
 ### Implementation Management
-- `GET /supply-rate/v1/implementations/health` - Get implementation health status
+- `GET /supply-rate/health?deep=true` - Get implementation health status
 - `POST /supply-rate/v1/implementations/refresh` - Refresh implementation configurations
 
 ### Example Request
@@ -296,7 +296,7 @@ curl -X POST http://localhost:8080/supply-rate/v1/rates/calculate \
   }'
 
 # Test implementation health
-curl http://localhost:8080/supply-rate/v1/implementations/health
+curl http://localhost:8080/supply-rate/health?deep=true
 
 # Test rate comparison
 curl -X POST http://localhost:8080/supply-rate/v1/rates/compare \
@@ -375,7 +375,7 @@ curl http://localhost:8080/supply-rate/health
 curl http://localhost:8080/supply-rate/health?deep=true
 
 # Implementation health status
-curl http://localhost:8080/supply-rate/v1/implementations/health
+curl http://localhost:8080/supply-rate/health?deep=true
 
 # Service metrics
 curl http://localhost:8080/metrics

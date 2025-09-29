@@ -19,7 +19,4 @@ func SetupRateRoutes(
 
 	// Single quotes endpoint
 	router.Post("/quotes", rateHandler.GetQuotes)
-
-	// Health endpoint for implementations
-	router.Get("/implementations/health", rateHandler.GetImplementationHealth)
 }

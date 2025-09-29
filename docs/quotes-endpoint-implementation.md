@@ -42,7 +42,7 @@ func SetupRateRoutes(
 	router.Post("/quotes", rateHandler.GetQuotes)
 	
 	// Health endpoint for implementations
-	router.Get("/implementations/health", rateHandler.GetImplementationHealth)
+	// Implementation health is now available via deep health check: /supply-rate/health?deep=true
 }
 ```
 

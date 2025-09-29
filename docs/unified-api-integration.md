@@ -232,7 +232,7 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 
 ### 2. Health Check Test
 ```bash
-curl -X GET http://localhost:9046/supply-rate/v1/implementations/health \
+curl -X GET http://localhost:9046/supply-rate/health?deep=true \
   -H "Content-Type: application/json"
 ```
 

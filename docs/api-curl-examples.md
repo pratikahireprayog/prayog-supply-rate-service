@@ -108,68 +108,6 @@ curl -X GET "http://localhost:9046/supply-rate/health?deep=true" \
 }
 ```
 
-### 4. Implementation Health Check
-**Endpoint**: `GET /supply-rate/v1/implementations/health`  
-**Purpose**: Detailed health status of all rate implementations
-
-```bash
-curl -X GET http://localhost:9046/supply-rate/v1/implementations/health \
-  -H "Content-Type: application/json"
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "message": "Operation completed successfully",
-  "data": {
-    "status": "healthy",
-    "total_providers": 4,
-    "healthy_providers": 4,
-    "unhealthy_providers": 0,
-    "providers": [
-      {
-        "partner_id": "unified",
-        "partner_name": "Unified Rate Service",
-        "provider_type": "pre_defined",
-        "status": "healthy",
-        "is_active": true,
-        "last_checked": "2025-09-29T10:30:00Z",
-        "response_time": 850,
-        "details": {
-          "is_authenticated": true,
-          "auth_info": {
-            "user_email": "avinash.singh@prayog.io",
-            "user_id": "8113cdfa-b0d1-70e8-f113-2967182cf6d0",
-            "tenant_id": "68cd38e86423698971766a14",
-            "token_type": "Bearer",
-            "expires_in": 86400,
-            "obtained_at": "2025-09-29T09:30:00Z"
-          }
-        }
-      },
-      {
-        "partner_id": "dhl", 
-        "partner_name": "DHL Express",
-        "provider_type": "real_time",
-        "status": "healthy",
-        "is_active": true,
-        "last_checked": "2025-09-29T10:30:00Z",
-        "response_time": 1200
-      }
-    ],
-    "checked_at": "2025-09-29T10:30:00Z",
-    "response_time_ms": 1250
-  },
-  "meta": {
-    "request_id": "health-req-123",
-    "response_time_ms": 1250,
-    "version": "v1"
-  },
-  "timestamp": "2025-09-29T10:30:00Z"
-}
-```
-
 ---
 
 ## 📦 Quote APIs
@@ -608,7 +546,6 @@ curl -X GET http://localhost:9046/supply-rate/ \
   "endpoints": {
     "quotes": "/supply-rate/v1/quotes",
     "health": "/supply-rate/health",
-    "implementation_health": "/supply-rate/v1/implementations/health",
     "metrics": "/supply-rate/metrics"
   },
   "supported_partners": [
@@ -785,43 +722,16 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 
 ## 🔐 Authentication Examples
 
-### 1. Health Check with Authentication Status
+### 1. Service Authentication Status
+Authentication status can be checked through the deep health check:
+
 ```bash
-curl -X GET http://localhost:9046/supply-rate/v1/implementations/health \
+curl -X GET "http://localhost:9046/supply-rate/health?deep=true" \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: health-$(date +%s)"
 ```
 
-This will show authentication status for the Unified Rate service:
-
-```json
-{
-  "data": {
-    "providers": [
-      {
-        "partner_id": "unified",
-        "partner_name": "Unified Rate Service", 
-        "provider_type": "pre_defined",
-        "status": "healthy",
-        "is_active": true,
-        "last_checked": "2025-09-29T10:30:00Z",
-        "response_time": 850,
-        "details": {
-          "is_authenticated": true,
-          "auth_info": {
-            "user_email": "avinash.singh@prayog.io",
-            "user_id": "8113cdfa-b0d1-70e8-f113-2967182cf6d0", 
-            "tenant_id": "68cd38e86423698971766a14",
-            "token_type": "Bearer",
-            "expires_in": 86400,
-            "obtained_at": "2025-09-29T09:30:00Z"
-          }
-        }
-      }
-    ]
-  }
-}
-```
+This will show authentication status for the Unified Rate service in the implementations section of the health response.
 
 ---
 
@@ -834,7 +744,7 @@ echo "=== Supply Rate Service Health Check ==="
 echo "Liveness: $(curl -s -o /dev/null -w "%{http_code}" http://localhost:9046/health/live)"
 echo "Readiness: $(curl -s -o /dev/null -w "%{http_code}" http://localhost:9046/health/ready)"  
 echo "App Health: $(curl -s -o /dev/null -w "%{http_code}" http://localhost:9046/supply-rate/health)"
-echo "Implementation Health: $(curl -s -o /dev/null -w "%{http_code}" http://localhost:9046/supply-rate/v1/implementations/health)"
+echo "Deep Health: $(curl -s -o /dev/null -w "%{http_code}" "http://localhost:9046/supply-rate/health?deep=true")"
 ```
 
 ### Load Testing Script
