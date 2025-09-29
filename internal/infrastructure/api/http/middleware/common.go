@@ -8,8 +8,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	interfaces "github.com/prayog/prayog-rate-service/internal/shared/interfaces/v1"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
 )
 
 // ResponseTime middleware adds response time header

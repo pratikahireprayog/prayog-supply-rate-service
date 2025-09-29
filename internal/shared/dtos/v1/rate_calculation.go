@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	v1 "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	v1 "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
 )
 
 // RateCalculationRequest represents the request for rate calculation

@@ -3,7 +3,7 @@ package v1
 import (
 	"time"
 
-	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
+	models "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
 )
 
 // ProviderType is an alias for models.PartnerType for consistency

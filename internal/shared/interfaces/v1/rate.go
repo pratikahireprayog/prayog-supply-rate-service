@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	dtos "github.com/prayog/prayog-rate-service/internal/shared/dtos/v1"
-	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
+	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
+	models "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
 )
 
 // RateImplementation defines the interface for all rate implementations
@@ -93,19 +93,10 @@ type RateFactory interface {
 // ImplementationCreator defines the function signature for creating implementation instances
 type ImplementationCreator func(partner *models.Partner) (RateImplementation, error)
 
-// RateService defines the main service interface for rate calculations
+// RateService defines the main service interface for rate operations
 type RateService interface {
-	// CalculateRates calculates rates from all available implementations
-	CalculateRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateCalculationResponse, error)
-
-	// CalculateRatesByImplementation calculates rates from a specific implementation
-	CalculateRatesByImplementation(ctx context.Context, request *dtos.RateCalculationRequest, implementationID string) (*dtos.RateCalculationResponse, error)
-
-	// GetBestRate returns the best rate from all available implementations
-	GetBestRate(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateQuote, error)
-
-	// CompareRates compares rates from multiple implementations
-	CompareRates(ctx context.Context, request *dtos.RateCalculationRequest) (*dtos.RateComparisonResponse, error)
+	// GetQuotes retrieves quotes from multiple partners
+	GetQuotes(ctx context.Context, request *dtos.QuoteRequest, requestID string) (*dtos.QuoteResponse, error)
 
 	// GetImplementationHealth returns health status of all implementations
 	GetImplementationHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error)

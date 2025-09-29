@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	dtos "github.com/prayog/prayog-rate-service/internal/shared/dtos/v1"
-	interfaces "github.com/prayog/prayog-rate-service/internal/shared/interfaces/v1"
-	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
+	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	models "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
 )
 
 // BasePreDefined provides a base implementation for pre-defined rates

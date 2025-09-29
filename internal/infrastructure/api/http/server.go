@@ -15,10 +15,10 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 
-	"github.com/prayog/prayog-rate-service/internal/infrastructure/api/http/middleware"
-	routesv1 "github.com/prayog/prayog-rate-service/internal/infrastructure/api/http/v1/routes"
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	interfaces "github.com/prayog/prayog-rate-service/internal/shared/interfaces/v1"
+	"github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http/middleware"
+	routesv1 "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http/v1/routes"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
 )
 
 // ServerConfig holds the server configuration
@@ -221,22 +221,22 @@ func (s *Server) setupMiddleware() {
 }
 
 func (s *Server) setupRoutes() {
-	// Rate API with global prefix
-	rate := s.app.Group("/rate")
+	// Supply Rate API with global prefix
+	supplyRate := s.app.Group("/supply-rate")
 
-	// Health endpoints under rate prefix
-	rate.Get("/health", s.healthHandler)
+	// Health endpoints under supply-rate prefix
+	supplyRate.Get("/health", s.healthHandler)
 
-	// Metrics endpoint under rate prefix
+	// Metrics endpoint under supply-rate prefix
 	if s.config.EnableMetrics {
-		rate.Get("/metrics", s.metricsHandler)
+		supplyRate.Get("/metrics", s.metricsHandler)
 	}
 
-	// API documentation at rate root
-	rate.Get("/", s.apiInfoHandler)
+	// API documentation at supply-rate root
+	supplyRate.Get("/", s.apiInfoHandler)
 
-	// Version 1 routes directly under rate
-	v1 := rate.Group("/v1")
+	// Version 1 routes directly under supply-rate
+	v1 := supplyRate.Group("/v1")
 	routesv1.SetupRateRoutes(v1, s.rateService, s.logger, s.metrics)
 }
 
@@ -321,7 +321,7 @@ func (s *Server) healthHandler(c *fiber.Ctx) error {
 	healthStatus := fiber.Map{
 		"status":    "healthy",
 		"timestamp": time.Now(),
-		"service":   "prayog-rate-service",
+		"service":   "prayog-supply-rate-service",
 		"version":   constants.APIVersionV1,
 		"uptime":    time.Since(time.Now()).String(), // This should be actual uptime
 	}
@@ -356,7 +356,7 @@ func (s *Server) metricsHandler(c *fiber.Ctx) error {
 	// Return basic metrics information
 	// In production, this might integrate with Prometheus or similar
 	metrics := fiber.Map{
-		"service":   "prayog-rate-service",
+		"service":   "prayog-supply-rate-service",
 		"timestamp": time.Now(),
 		"metrics": fiber.Map{
 			"http_requests_total":     "counter",
@@ -371,16 +371,15 @@ func (s *Server) metricsHandler(c *fiber.Ctx) error {
 
 func (s *Server) apiInfoHandler(c *fiber.Ctx) error {
 	info := fiber.Map{
-		"service":     "Prayog Rate Card Service",
+		"service":     "Prayog Supply Rate Service",
 		"description": "A microservice for calculating shipping rates from multiple logistics partners",
 		"version":     constants.APIVersionV1,
 		"endpoints": fiber.Map{
-			"health":             "/rate/health",
-			"metrics":            "/rate/metrics",
-			"api_info":           "/rate/",
-			"rates_v1":           "/rate/v1/rates",
-			"implementations_v1": "/rate/v1/implementations",
-			"partners_v1":        "/rate/v1/partners",
+			"health":             "/supply-rate/health",
+			"metrics":            "/supply-rate/metrics",
+			"api_info":           "/supply-rate/",
+			"quotes_v1":          "/supply-rate/v1/quotes",
+			"implementations_v1": "/supply-rate/v1/implementations/health",
 		},
 		"documentation": "/docs",
 		"timestamp":     time.Now(),

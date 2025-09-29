@@ -7,19 +7,20 @@ import (
 	"os"
 	"time"
 
-	httpserver "github.com/prayog/prayog-rate-service/internal/infrastructure/api/http"
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	dtos "github.com/prayog/prayog-rate-service/internal/shared/dtos/v1"
-	interfaces "github.com/prayog/prayog-rate-service/internal/shared/interfaces/v1"
+	httpserver "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
+	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
 const (
 	// Service information
-	ServiceName    = "prayog-rate-service"
+	ServiceName    = "prayog-supply-rate-service"
 	ServiceVersion = "1.0.0"
 
 	// Default configuration values
-	DefaultPort = "8080"
+	DefaultPort = "9046"
 	DefaultHost = "0.0.0.0"
 )
 
@@ -115,11 +116,12 @@ func initializeDependencies() *Dependencies {
 	// For Phase 1, we create mock implementations to demonstrate the structure
 	logger := NewMockLogger()
 	metrics := NewMockMetrics()
+	httpClient := utils.NewHTTPClient(30*time.Second, 2) // 30s timeout, 2 retries
 
 	logger.Info("Dependencies initialized successfully")
 
 	return &Dependencies{
-		RateService: NewMockRateService(logger, metrics),
+		RateService: NewMockRateService(logger, metrics, httpClient),
 		Logger:      logger,
 		Metrics:     metrics,
 	}
@@ -183,14 +185,16 @@ func (m MockMetrics) RecordHistogram(name string, value float64, tags map[string
 
 // MockRateService provides a mock rate service for Phase 1
 type MockRateService struct {
-	logger  MockLogger
-	metrics MockMetrics
+	logger     MockLogger
+	metrics    MockMetrics
+	httpClient interfaces.HTTPClient
 }
 
-func NewMockRateService(logger MockLogger, metrics MockMetrics) *MockRateService {
+func NewMockRateService(logger MockLogger, metrics MockMetrics, httpClient interfaces.HTTPClient) *MockRateService {
 	return &MockRateService{
-		logger:  logger,
-		metrics: metrics,
+		logger:     logger,
+		metrics:    metrics,
+		httpClient: httpClient,
 	}
 }
 
@@ -265,4 +269,46 @@ func (m *MockRateService) RefreshImplementations(ctx context.Context) error {
 	m.logger.Info("Mock: RefreshImplementations called")
 	m.metrics.IncrementCounter("mock_implementation_refresh", map[string]string{"status": "success"})
 	return nil
+}
+
+func (m *MockRateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest, requestID string) (*dtos.QuoteResponse, error) {
+	m.logger.Info("Mock: GetQuotes called")
+	m.metrics.IncrementCounter("mock_get_quotes", map[string]string{"status": "success"})
+
+	// Return a mock response
+	return &dtos.QuoteResponse{
+		RequestID: requestID,
+		PartnerRates: []dtos.PartnerRateResult{
+			{
+				Partner: dtos.PartnerInfo{
+					ID:   "mock-partner-1",
+					Code: "MOCK_PARTNER",
+				},
+				Success: true,
+				AvailableRates: []dtos.Rate{
+					{
+						RateID:  "mock-rate-1",
+						Service: "Mock Service",
+						Price: dtos.Price{
+							Currency: "INR",
+							Amount:   100.00,
+							Type:     "standard",
+							Criteria: map[string]interface{}{
+								"mock": "true",
+							},
+						},
+						DeliveryDays: func() *int { d := 3; return &d }(),
+					},
+				},
+				DataSource:     "pre_defined",
+				ResponseTimeMs: 50,
+			},
+		},
+		Summary: dtos.QuoteSummary{
+			TotalPartners:      1,
+			SuccessfulPartners: 1,
+			TotalRatesFound:    1,
+		},
+		RetrievedAt: time.Now(),
+	}, nil
 }

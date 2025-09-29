@@ -80,8 +80,8 @@ The service follows **Clean Architecture** principles with strict versioning:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/prayog/prayog-rate-service.git
-   cd prayog-rate-service
+   git clone https://github.com/prayog/prayog-supply-rate-service.git
+   cd prayog-supply-rate-service
    ```
 
 2. **Install dependencies**:
@@ -96,7 +96,7 @@ The service follows **Clean Architecture** principles with strict versioning:
 
 4. **Verify the service**:
    ```bash
-   curl http://localhost:8080/rate/health
+   curl http://localhost:8080/supply-rate/health
    ```
 
 The service will be available at `http://localhost:8080`
@@ -136,17 +136,17 @@ nohup ./bin/rate-service > logs/service.log 2>&1 &
 
 ```bash
 # Build Docker image (planned for Phase 2)
-docker build -t prayog-rate-service .
+docker build -t prayog-supply-rate-service .
 
 # Run with Docker (planned for Phase 2)
-docker run -p 8080:8080 prayog-rate-service
+docker run -p 8080:8080 prayog-supply-rate-service
 ```
 
 ### Service Management
 
 ```bash
 # Check if service is running
-curl http://localhost:8080/rate/health
+curl http://localhost:8080/supply-rate/health
 
 # Stop the service (if running in background)
 pkill -f rate-service
@@ -155,7 +155,7 @@ pkill -f rate-service
 tail -f logs/service.log
 
 # Monitor service in real-time
-watch -n 2 'curl -s http://localhost:8080/rate/health | jq'
+watch -n 2 'curl -s http://localhost:8080/supply-rate/health | jq'
 ```
 
 ### Environment Configuration
@@ -170,26 +170,26 @@ watch -n 2 'curl -s http://localhost:8080/rate/health | jq'
 ## 📡 API Endpoints
 
 ### Health & Monitoring
-- `GET /rate/health` - Basic health check
+- `GET /supply-rate/health` - Basic health check
 - `GET /health/live` - Liveness probe (Kubernetes)
 - `GET /health/ready` - Readiness probe (Kubernetes)
-- `GET /rate/metrics` - Service metrics
+- `GET /supply-rate/metrics` - Service metrics
 
 ### Rate Calculation (Phase 1: Mock Implementation)
-- `POST /rate/v1/rates/calculate` - Calculate rates from all implementations
-- `POST /rate/v1/rates/quote` - Get rate quote (alias for calculate)
-- `POST /rate/v1/rates/compare` - Compare rates from multiple implementations
-- `POST /rate/v1/rates/best` - Get the best rate
-- `POST /rate/v1/rates/implementation/:implementationId` - Get rates from specific implementation
+- `POST /supply-rate/v1/rates/calculate` - Calculate rates from all implementations
+- `POST /supply-rate/v1/rates/quote` - Get rate quote (alias for calculate)
+- `POST /supply-rate/v1/rates/compare` - Compare rates from multiple implementations
+- `POST /supply-rate/v1/rates/best` - Get the best rate
+- `POST /supply-rate/v1/rates/implementation/:implementationId` - Get rates from specific implementation
 
 ### Implementation Management
-- `GET /rate/v1/implementations/health` - Get implementation health status
-- `POST /rate/v1/implementations/refresh` - Refresh implementation configurations
+- `GET /supply-rate/v1/implementations/health` - Get implementation health status
+- `POST /supply-rate/v1/implementations/refresh` - Refresh implementation configurations
 
 ### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/rate/v1/rates/calculate \
+curl -X POST http://localhost:8080/supply-rate/v1/rates/calculate \
   -H "Content-Type: application/json" \
   -d '{
     "request_id": "req-123",
@@ -209,7 +209,7 @@ curl -X POST http://localhost:8080/rate/v1/rates/calculate \
 ## 🏛️ Project Structure
 
 ```
-prayog-rate-service/
+prayog-supply-rate-service/
 ├── cmd/
 │   └── server/main.go              # Application entry point
 ├── internal/
@@ -253,13 +253,13 @@ go test ./test/...
 
 ```bash
 # Test basic health
-curl http://localhost:8080/rate/health
+curl http://localhost:8080/supply-rate/health
 
 # Test API info
-curl http://localhost:8080/rate/
+curl http://localhost:8080/supply-rate/
 
 # Test rate calculation
-curl -X POST http://localhost:8080/rate/v1/rates/calculate \
+curl -X POST http://localhost:8080/supply-rate/v1/rates/calculate \
   -H "Content-Type: application/json" \
   -d '{
     "request_id": "test-123",
@@ -277,7 +277,7 @@ curl -X POST http://localhost:8080/rate/v1/rates/calculate \
   }'
 
 # Test with specific implementation types
-curl -X POST http://localhost:8080/rate/v1/rates/calculate \
+curl -X POST http://localhost:8080/supply-rate/v1/rates/calculate \
   -H "Content-Type: application/json" \
   -d '{
     "request_id": "test-types",
@@ -296,10 +296,10 @@ curl -X POST http://localhost:8080/rate/v1/rates/calculate \
   }'
 
 # Test implementation health
-curl http://localhost:8080/rate/v1/implementations/health
+curl http://localhost:8080/supply-rate/v1/implementations/health
 
 # Test rate comparison
-curl -X POST http://localhost:8080/rate/v1/rates/compare \
+curl -X POST http://localhost:8080/supply-rate/v1/rates/compare \
   -H "Content-Type: application/json" \
   -d '{
     "request_id": "test-compare",
@@ -338,7 +338,7 @@ hey -n 100 -c 10 http://localhost:8080/health
 hey -n 50 -c 5 -m POST \
   -H "Content-Type: application/json" \
   -d '{"request_id":"load-test","customer_id":"cust-456","origin_city":"Mumbai","dest_city":"Delhi","weight":5.0,"distance":1400.0,"service_type":"standard","pickup_date":"2025-01-15T10:00:00Z","delivery_date":"2025-01-17T18:00:00Z","priority":"normal","currency":"INR","source":"api"}' \
-  http://localhost:8080/rate/v1/rates/calculate
+  http://localhost:8080/supply-rate/v1/rates/calculate
 ```
 
 ### Quick Commands Reference
@@ -351,7 +351,7 @@ go run cmd/server/main.go                    # Development mode
 
 # 🧪 Test Service
 curl http://localhost:8080/health            # Health check
-curl http://localhost:8080/rate/             # API info
+curl http://localhost:8080/supply-rate/             # API info
 ./test_service.sh                            # Comprehensive test
 
 # 🛑 Stop Service
@@ -369,13 +369,13 @@ watch curl -s http://localhost:8080/health   # Monitor health
 
 ```bash
 # Basic health check
-curl http://localhost:8080/rate/health
+curl http://localhost:8080/supply-rate/health
 
 # Deep health check (includes implementation status)
-curl http://localhost:8080/rate/health?deep=true
+curl http://localhost:8080/supply-rate/health?deep=true
 
 # Implementation health status
-curl http://localhost:8080/rate/v1/implementations/health
+curl http://localhost:8080/supply-rate/v1/implementations/health
 
 # Service metrics
 curl http://localhost:8080/metrics
@@ -391,7 +391,7 @@ curl http://localhost:8080/metrics
 tail -f logs/service.log
 
 # Monitor HTTP requests
-curl -s http://localhost:8080/rate/v1/rates/calculate \
+curl -s http://localhost:8080/supply-rate/v1/rates/calculate \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: debug-123" \
   -d '{"request_id":"debug-test","customer_id":"cust-456","origin_city":"Mumbai","dest_city":"Delhi","weight":5.0,"distance":1400.0,"service_type":"standard","pickup_date":"2025-01-15T10:00:00Z","delivery_date":"2025-01-17T18:00:00Z","priority":"normal","currency":"INR","source":"api"}'
@@ -465,7 +465,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support and questions:
 
-- **Issues**: [GitHub Issues](https://github.com/prayog/prayog-rate-service/issues)
+- **Issues**: [GitHub Issues](https://github.com/prayog/prayog-supply-rate-service/issues)
 - **Documentation**: [API Documentation](./api_docs/)
 - **Email**: support@prayog.com
 
@@ -481,3 +481,7 @@ Built with ❤️ by the Prayog team using:
 ---
 
 **Status**: Phase 1 Complete ✅ | **Next**: Phase 2 - Real-time Rate Providers 🚧
+
+
+
+go run cmd/server/main.go

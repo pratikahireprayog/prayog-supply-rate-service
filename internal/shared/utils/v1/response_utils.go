@@ -7,8 +7,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	dtos "github.com/prayog/prayog-rate-service/internal/shared/dtos/v1"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 )
 
 // SuccessResponse creates a standardized success response

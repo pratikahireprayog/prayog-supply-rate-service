@@ -7,10 +7,15 @@ import (
 	"sync"
 	"time"
 
-	constants "github.com/prayog/prayog-rate-service/internal/shared/constants/v1"
-	dtos "github.com/prayog/prayog-rate-service/internal/shared/dtos/v1"
-	interfaces "github.com/prayog/prayog-rate-service/internal/shared/interfaces/v1"
-	models "github.com/prayog/prayog-rate-service/internal/shared/models/v1"
+	"github.com/google/uuid"
+
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
+	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
+	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
+	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	models "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
+	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
 // RateService implements the main rate calculation service
@@ -20,6 +25,7 @@ type RateService struct {
 	cacheManager interfaces.CacheManager
 	logger       interfaces.Logger
 	metrics      interfaces.MetricsCollector
+	httpClient   interfaces.HTTPClient
 
 	// Configuration
 	maxConcurrency   int
@@ -35,6 +41,7 @@ func NewRateService(
 	cacheManager interfaces.CacheManager,
 	logger interfaces.Logger,
 	metrics interfaces.MetricsCollector,
+	httpClient interfaces.HTTPClient,
 ) interfaces.RateService {
 	return &RateService{
 		factory:          factory,
@@ -42,6 +49,7 @@ func NewRateService(
 		cacheManager:     cacheManager,
 		logger:           logger,
 		metrics:          metrics,
+		httpClient:       httpClient,
 		maxConcurrency:   10,    // Default max concurrent requests
 		defaultTimeoutMs: 10000, // 10 seconds default timeout
 		cacheEnabled:     true,
@@ -770,4 +778,307 @@ func (s *RateService) getHealthStatusString(isHealthy bool) string {
 		return "healthy"
 	}
 	return "unhealthy"
+}
+
+// GetQuotes retrieves quotes from multiple partners
+func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest, requestID string) (*dtos.QuoteResponse, error) {
+	startTime := time.Now()
+
+	response := &dtos.QuoteResponse{
+		RequestID:    requestID,
+		PartnerRates: make([]dtos.PartnerRateResult, 0, len(request.Partners)),
+		RetrievedAt:  startTime,
+	}
+
+	// Process each partner
+	for _, partner := range request.Partners {
+		partnerStartTime := time.Now()
+
+		// Normalize partner code
+		normalizedCode := utils.NormalizePartnerCode(partner.Code)
+
+		partnerResult := dtos.PartnerRateResult{
+			Partner: dtos.PartnerInfo{
+				ID:   partner.ID,
+				Code: normalizedCode, // Use normalized code
+			},
+			Success:        false,
+			AvailableRates: []dtos.Rate{},
+		}
+
+		// Use partner.ID if provided, otherwise use normalized code
+		partnerIdentifier := partner.ID
+		if partnerIdentifier == "" {
+			partnerIdentifier = normalizedCode
+		}
+
+		// Get implementation for this partner
+		implementation, err := s.factory.GetImplementationInstance(partnerIdentifier)
+		if err != nil {
+			// Try to create implementation based on partner code
+			implementation, err = s.createImplementationByCode(normalizedCode)
+			if err != nil {
+				partnerResult.Error = &dtos.RateError{
+					Code:    "PARTNER_NOT_FOUND",
+					Message: "Partner implementation not found",
+					Details: fmt.Sprintf("No implementation found for partner code: %s", normalizedCode),
+				}
+				partnerResult.ResponseTimeMs = time.Since(partnerStartTime).Milliseconds()
+				response.PartnerRates = append(response.PartnerRates, partnerResult)
+				continue
+			}
+		}
+
+		// Convert request to internal format
+		internalRequest := s.convertQuoteRequestToRateRequest(request)
+
+		// Get rates from implementation
+		rateResponse, err := implementation.GetRates(ctx, internalRequest)
+		if err != nil {
+			partnerResult.Error = &dtos.RateError{
+				Code:    "RATE_FETCH_FAILED",
+				Message: "Failed to fetch rates from partner",
+				Details: err.Error(),
+			}
+		} else {
+			// Convert response to simplified format
+			partnerResult.AvailableRates = s.convertRateResponseToRates(rateResponse)
+			partnerResult.Success = true
+		}
+
+		// Set data source based on implementation type
+		if implementation.GetImplementationType() == dtos.ProviderTypePreDefined {
+			partnerResult.DataSource = "pre_defined"
+		} else {
+			partnerResult.DataSource = "real_time"
+		}
+
+		partnerResult.ResponseTimeMs = time.Since(partnerStartTime).Milliseconds()
+		response.PartnerRates = append(response.PartnerRates, partnerResult)
+	}
+
+	// Calculate summary
+	response.Summary = s.calculateQuoteSummary(response.PartnerRates)
+
+	return response, nil
+}
+
+// Helper method to convert quote request to internal rate request
+func (s *RateService) convertQuoteRequestToRateRequest(req *dtos.QuoteRequest) *dtos.RateCalculationRequest {
+	// Extract metadata values with defaults
+	currency := "INR"
+	serviceType := "standard"
+
+	if req.Metadata != nil {
+		if curr, ok := req.Metadata["currency"].(string); ok {
+			currency = curr
+		}
+		if svc, ok := req.Metadata["service_type"].(string); ok {
+			serviceType = svc
+		}
+	}
+
+	// Calculate total weight (simplified - sum all packages)
+	totalWeight := 0.0
+	for _, pkg := range req.Packages {
+		totalWeight += pkg.Weight.Value
+	}
+
+	return &dtos.RateCalculationRequest{
+		RequestID:    uuid.New().String(),
+		CustomerID:   "default", // Default customer ID
+		OriginCity:   req.SourceLocation.PostalCode,
+		DestCity:     req.DestinationLocation.PostalCode,
+		Weight:       totalWeight,
+		Distance:     0, // Will be calculated if needed
+		ServiceType:  serviceType,
+		Currency:     currency,
+		PickupDate:   time.Now(),
+		DeliveryDate: time.Now().AddDate(0, 0, 1), // Default next day
+		Priority:     "normal",
+		Source:       "api",
+	}
+}
+
+// Helper method to convert internal rate response to simplified rates
+func (s *RateService) convertRateResponseToRates(resp *dtos.RateCalculationResponse) []dtos.Rate {
+	rates := make([]dtos.Rate, 0, len(resp.Quotes))
+
+	for _, quote := range resp.Quotes {
+		rate := dtos.Rate{
+			RateID:  quote.QuoteID,
+			Service: quote.PartnerName,
+			Price: dtos.Price{
+				Currency: quote.Currency,
+				Amount:   quote.TotalPrice,
+				Type:     "standard",
+			},
+		}
+
+		if quote.EstimatedDays > 0 {
+			rate.DeliveryDays = &quote.EstimatedDays
+		}
+
+		rates = append(rates, rate)
+	}
+
+	return rates
+}
+
+// Helper method to calculate quote summary
+func (s *RateService) calculateQuoteSummary(partnerRates []dtos.PartnerRateResult) dtos.QuoteSummary {
+	summary := dtos.QuoteSummary{
+		TotalPartners: len(partnerRates),
+	}
+
+	for _, partnerRate := range partnerRates {
+		if partnerRate.Success {
+			summary.SuccessfulPartners++
+			summary.TotalRatesFound += len(partnerRate.AvailableRates)
+		}
+	}
+
+	return summary
+}
+
+// createImplementationByCode creates implementation based on partner code
+func (s *RateService) createImplementationByCode(normalizedCode string) (interfaces.RateImplementation, error) {
+	switch normalizedCode {
+	case "dhl":
+		s.logger.Info("Creating DHL service", "partner_code", normalizedCode)
+		return dhl.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "fedex":
+		return nil, fmt.Errorf("FedEx implementation not yet available")
+	case "ups":
+		return nil, fmt.Errorf("UPS implementation not yet available")
+	case "blue_dart":
+		return nil, fmt.Errorf("Blue Dart implementation not yet available")
+	case "delhivery":
+		s.logger.Info("Redirecting Delhivery to Unified Rate service", "partner_code", normalizedCode)
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "porter":
+		s.logger.Info("Redirecting Porter to Unified Rate service", "partner_code", normalizedCode)
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "unified":
+		s.logger.Info("Creating Unified Rate service", "partner_code", normalizedCode)
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "prayog":
+		s.logger.Info("Creating Unified Rate service", "partner_code", normalizedCode)
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "dunzo":
+		return nil, fmt.Errorf("Dunzo implementation not yet available")
+	case "aramex":
+		return nil, fmt.Errorf("Aramex implementation not yet available")
+	default:
+		return nil, fmt.Errorf("unknown partner code: %s", normalizedCode)
+	}
+}
+
+// GetImplementationHealth returns health status of all implementations
+func (s *RateService) GetImplementationHealth(ctx context.Context) (*dtos.ProviderHealthResponse, error) {
+	startTime := time.Now()
+
+	// Get all implementation instances
+	instances := s.factory.GetAllInstances()
+
+	// Perform health checks
+	healthResults := s.factory.HealthCheckAll(ctx)
+
+	// Build response
+	implementationStatuses := make([]dtos.ProviderHealthStatus, 0, len(instances))
+	healthyCount := 0
+
+	for partnerID, implementation := range instances {
+		err := healthResults[partnerID]
+		isHealthy := err == nil
+		if isHealthy {
+			healthyCount++
+		}
+
+		status := dtos.ProviderHealthStatus{
+			PartnerID:    partnerID,
+			PartnerName:  implementation.GetImplementationName(),
+			ProviderType: implementation.GetImplementationType(),
+			Status:       s.getHealthStatusString(isHealthy),
+			IsActive:     true,
+			LastChecked:  time.Now(),
+			ResponseTime: 0, // TODO: Implement response time tracking
+		}
+
+		if err != nil {
+			status.ErrorMessage = err.Error()
+		}
+
+		implementationStatuses = append(implementationStatuses, status)
+	}
+
+	overallStatus := "healthy"
+	if healthyCount == 0 {
+		overallStatus = "critical"
+	} else if healthyCount < len(instances) {
+		overallStatus = "degraded"
+	}
+
+	response := &dtos.ProviderHealthResponse{
+		Status:             overallStatus,
+		TotalProviders:     len(instances),
+		HealthyProviders:   healthyCount,
+		UnhealthyProviders: len(instances) - healthyCount,
+		Providers:          implementationStatuses,
+		CheckedAt:          time.Now(),
+		ResponseTime:       time.Since(startTime).Milliseconds(),
+	}
+
+	return response, nil
+}
+
+// RefreshImplementations refreshes all implementation configurations
+func (s *RateService) RefreshImplementations(ctx context.Context) error {
+	s.logger.Info("Starting implementation refresh")
+
+	// Get all active partners
+	partners, err := s.partnerRepo.GetActive(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get active partners", "error", err)
+		return fmt.Errorf("failed to get active partners: %w", err)
+	}
+
+	refreshErrors := make([]string, 0)
+	successCount := 0
+
+	for _, partner := range partners {
+		s.logger.Info("Refreshing implementation", "partner_id", partner.ID, "partner_name", partner.Name)
+
+		// Remove existing implementation instance
+		err := s.factory.RemoveImplementationInstance(partner.ID.String())
+		if err != nil {
+			s.logger.Warn("Failed to remove existing implementation", "partner_id", partner.ID, "error", err)
+		}
+
+		// Create new implementation instance
+		_, err = s.factory.CreateImplementation(partner.Type, partner.ID.String())
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to create implementation for partner %s: %v", partner.ID, err)
+			refreshErrors = append(refreshErrors, errMsg)
+			s.logger.Error("Failed to create implementation", "partner_id", partner.ID, "error", err)
+			continue
+		}
+
+		successCount++
+		s.logger.Info("Implementation refreshed successfully", "partner_id", partner.ID)
+	}
+
+	if len(refreshErrors) > 0 {
+		s.logger.Warn("Implementation refresh completed with errors",
+			"success_count", successCount,
+			"error_count", len(refreshErrors),
+			"errors", refreshErrors)
+		return fmt.Errorf("refresh completed with %d errors: %v", len(refreshErrors), refreshErrors)
+	}
+
+	s.logger.Info("Implementation refresh completed successfully",
+		"success_count", successCount,
+		"total_partners", len(partners))
+
+	return nil
 }
