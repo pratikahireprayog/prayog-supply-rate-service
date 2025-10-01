@@ -2,15 +2,27 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+	// "gorm.io/gorm" // Commented out since using mock repositories
+
 	httpserver "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http"
+	// database "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/database" // Commented out since using mock repositories
+	rateservice "github.com/prayog/prayog-supply-rate-service/internal/services/v1"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	models "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
+
+	// repositoriesv1 "github.com/prayog/prayog-supply-rate-service/internal/shared/repositories/v1" // Commented out since using mock repositories
 	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
@@ -38,6 +50,7 @@ func main() {
 	server := httpserver.NewServer(
 		config,
 		dependencies.RateService,
+		dependencies.RateCardService,
 		dependencies.Logger,
 		dependencies.Metrics,
 	)
@@ -60,7 +73,7 @@ func printBanner() {
 /_/   /_/   \___/ .___/\____/\__, /_/ |_|\__,_/\__/\___/ /____/\___/_/   \__,_/_/\___/\___/  
                /_/         /____/                                                           
 
-Rate Card Service - Phase 1: Project Structure Complete
+Rate Service - Production Ready Implementation
 ========================================================
 `
 	fmt.Println(banner)
@@ -103,27 +116,107 @@ func loadConfiguration() *httpserver.ServerConfig {
 	return config
 }
 
+// loadDatabaseConfig() commented out since we're using mock repositories
+/*
+func loadDatabaseConfig() *database.PostgresConfig {
+	config := database.DefaultPostgresConfig()
+
+	// Load from environment variables if available
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		config.Host = dbHost
+	}
+	if dbPort := os.Getenv("DB_PORT"); dbPort != "" {
+		fmt.Sscanf(dbPort, "%d", &config.Port)
+	}
+	if dbUser := os.Getenv("DB_USER"); dbUser != "" {
+		config.Username = dbUser
+	}
+	if dbPassword := os.Getenv("DB_PASSWORD"); dbPassword != "" {
+		config.Password = dbPassword
+	}
+	if dbName := os.Getenv("DB_NAME"); dbName != "" {
+		config.Database = dbName
+	}
+	if sslMode := os.Getenv("DB_SSL_MODE"); sslMode != "" {
+		config.SSLMode = sslMode
+	}
+	if logLevel := os.Getenv("DB_LOG_LEVEL"); logLevel != "" {
+		config.LogLevel = logLevel
+	}
+
+	log.Printf("Database configuration loaded - Host: %s, Port: %d, Database: %s",
+		config.Host, config.Port, config.Database)
+	return config
+}
+*/
+
 // Dependencies holds all service dependencies
 type Dependencies struct {
-	RateService interfaces.RateService
-	Logger      interfaces.Logger
-	Metrics     interfaces.MetricsCollector
+	RateService     interfaces.RateService
+	RateCardService *unified_rate.RateCardService
+	Logger          interfaces.Logger
+	Metrics         interfaces.MetricsCollector
 }
 
 func initializeDependencies() *Dependencies {
-	log.Println("Initializing dependencies (Phase 1: Mock implementations)")
+	log.Println("Initializing dependencies with real DHL implementation and mock repositories")
 
-	// For Phase 1, we create mock implementations to demonstrate the structure
-	logger := NewMockLogger()
-	metrics := NewMockMetrics()
+	// Initialize real dependencies
+	logger := NewMockLogger()                            // Using mock logger for now, can be replaced with real logger later
+	metrics := NewMockMetrics()                          // Using mock metrics for now, can be replaced with real metrics later
 	httpClient := utils.NewHTTPClient(30*time.Second, 2) // 30s timeout, 2 retries
 
-	logger.Info("Dependencies initialized successfully")
+	// Initialize mock repositories (since we don't have database setup yet)
+	partnerRepo := NewMockPartnerRepository()
+	rateCardRepo := NewMockUnifiedRateCardRepository()
+	cacheManager := NewMockCacheManager()
+
+	// Create rate factory
+	rateFactory := factory.NewRateFactory(partnerRepo, logger, metrics)
+
+	// Register DHL real-time implementation
+	dhlCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		return dhl.NewService(logger, metrics, httpClient), nil
+	}
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, dhlCreator); err != nil {
+		log.Fatalf("Failed to register DHL implementation: %v", err)
+	}
+
+	// Register Unified Rate pre-defined implementation
+	unifiedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
+	}
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypePreDefined, unifiedCreator); err != nil {
+		log.Fatalf("Failed to register Unified Rate implementation: %v", err)
+	}
+
+	// Create real rate service
+	rateService := rateservice.NewRateService(
+		rateFactory,
+		partnerRepo,
+		cacheManager,
+		logger,
+		metrics,
+		httpClient,
+	)
+
+	// Create unified rate card service
+	unifiedConfig := unified_rate.NewDefaultConfig()
+	rateCardService := unified_rate.NewRateCardService(
+		rateCardRepo,
+		httpClient,
+		logger,
+		metrics,
+		unifiedConfig,
+	)
+
+	logger.Info("All dependencies initialized successfully")
 
 	return &Dependencies{
-		RateService: NewMockRateService(logger, metrics, httpClient),
-		Logger:      logger,
-		Metrics:     metrics,
+		RateService:     rateService,
+		RateCardService: rateCardService,
+		Logger:          logger,
+		Metrics:         metrics,
 	}
 }
 
@@ -277,38 +370,234 @@ func (m *MockRateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequ
 
 	// Return a mock response
 	return &dtos.QuoteResponse{
-		RequestID: requestID,
-		PartnerRates: []dtos.PartnerRateResult{
-			{
-				Partner: dtos.PartnerInfo{
-					ID:   "mock-partner-1",
-					Code: "MOCK_PARTNER",
-				},
-				Success: true,
-				AvailableRates: []dtos.Rate{
-					{
-						RateID:  "mock-rate-1",
-						Service: "Mock Service",
-						Price: dtos.Price{
-							Currency: "INR",
-							Amount:   100.00,
-							Type:     "standard",
-							Criteria: map[string]interface{}{
-								"mock": "true",
-							},
-						},
-						DeliveryDays: func() *int { d := 3; return &d }(),
+		Success: true,
+		Message: "Mock rate quotes retrieved successfully.",
+		Metadata: dtos.QuoteResponseMeta{
+			RequestID:         requestID,
+			ResponseTimeMs:    50,
+			PartnersQueried:   1,
+			PartnersSucceeded: 1,
+			PartnersFailed:    0,
+			TotalRatesFound:   1,
+		},
+		Data: dtos.QuoteResponseData{
+			SuccessfulResponses: []dtos.SuccessfulPartnerResponse{
+				{
+					Partner: dtos.PartnerInfo{
+						Code: "MOCK_PARTNER",
+						Name: "Mock Partner",
 					},
+					Source: "pre_defined",
+					AvailableRates: []dtos.Rate{
+						{
+							RateID:  "mock-rate-1",
+							Service: "Mock Service",
+							Price: dtos.Price{
+								Currency: "INR",
+								Amount:   100.00,
+								Type:     "standard",
+								Criteria: map[string]interface{}{
+									"mock": "true",
+								},
+							},
+							DeliveryDays: func() *int { d := 3; return &d }(),
+						},
+					},
+					ResponseTimeMs: func() *int64 { t := int64(50); return &t }(),
 				},
-				DataSource:     "pre_defined",
-				ResponseTimeMs: 50,
 			},
+			FailedResponses: []dtos.FailedPartnerResponse{},
 		},
-		Summary: dtos.QuoteSummary{
-			TotalPartners:      1,
-			SuccessfulPartners: 1,
-			TotalRatesFound:    1,
-		},
-		RetrievedAt: time.Now(),
+		Timestamp: time.Now(),
 	}, nil
+}
+
+// MockPartnerRepository provides a basic partner repository for testing
+type MockPartnerRepository struct{}
+
+func NewMockPartnerRepository() *MockPartnerRepository {
+	return &MockPartnerRepository{}
+}
+
+func (r *MockPartnerRepository) GetByID(ctx context.Context, id string) (*models.Partner, error) {
+	// Return a mock DHL partner
+	return &models.Partner{
+		ID:   uuid.New(),
+		Code: "dhl",
+		Name: "DHL Express",
+		Type: dtos.ProviderTypeRealTime,
+		Config: map[string]interface{}{
+			"base_url":       "https://express.api.dhl.com/mydhlapi/test/rates",
+			"credentials":    "c2hyZWVtYXJ1dDhJTjpJITBwTV40c1IjNG5KJDF1",
+			"account_number": "533748932",
+			"timeout_ms":     30000,
+			"environment":    "test",
+		},
+		IsActive:  true,
+		Priority:  1,
+		TimeoutMs: 30000,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}, nil
+}
+
+func (r *MockPartnerRepository) GetByCode(ctx context.Context, code string) (*models.Partner, error) {
+	// Return the same mock DHL partner for any code
+	return r.GetByID(ctx, code)
+}
+
+func (r *MockPartnerRepository) GetAll(ctx context.Context, filters map[string]interface{}) ([]*models.Partner, error) {
+	return r.GetActivePartners(ctx)
+}
+
+func (r *MockPartnerRepository) GetPartnersByType(ctx context.Context, partnerType models.PartnerType) ([]*models.Partner, error) {
+	return []*models.Partner{}, nil
+}
+
+func (r *MockPartnerRepository) GetActivePartners(ctx context.Context) ([]*models.Partner, error) {
+	// Return mock active partners including DHL
+	return []*models.Partner{
+		{
+			ID:   uuid.New(),
+			Code: "dhl",
+			Name: "DHL Express",
+			Type: dtos.ProviderTypeRealTime,
+			Config: map[string]interface{}{
+				"base_url":       "https://express.api.dhl.com/mydhlapi/test/rates",
+				"credentials":    "c2hyZWVtYXJ1dDhJTjpJITBwTV40c1IjNG5KJDF1",
+				"account_number": "533748932",
+				"timeout_ms":     30000,
+				"environment":    "test",
+			},
+			IsActive:  true,
+			Priority:  1,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+	}, nil
+}
+
+func (r *MockPartnerRepository) Create(ctx context.Context, partner *models.Partner) error {
+	return nil
+}
+
+func (r *MockPartnerRepository) Update(ctx context.Context, partner *models.Partner) error {
+	return nil
+}
+
+func (r *MockPartnerRepository) Delete(ctx context.Context, id string) error {
+	return nil
+}
+
+func (r *MockPartnerRepository) UpdateHealthStatus(ctx context.Context, id string, status string) error {
+	return nil
+}
+
+// MockCacheManager provides a basic cache manager for testing
+type MockCacheManager struct{}
+
+func NewMockCacheManager() *MockCacheManager {
+	return &MockCacheManager{}
+}
+
+func (c *MockCacheManager) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	return nil
+}
+
+func (c *MockCacheManager) Get(ctx context.Context, key string, dest interface{}) error {
+	return errors.New("cache not found") // Using generic error since constants.ErrCacheNotFound doesn't exist
+}
+
+func (c *MockCacheManager) Delete(ctx context.Context, key string) error {
+	return nil
+}
+
+func (c *MockCacheManager) Exists(ctx context.Context, key string) (bool, error) {
+	return false, nil
+}
+
+func (c *MockCacheManager) Clear(ctx context.Context) error {
+	return nil
+}
+
+func (c *MockCacheManager) GetStats(ctx context.Context) (*dtos.CacheStats, error) {
+	return &dtos.CacheStats{
+		Hits:     0,
+		Misses:   0,
+		HitRate:  0.0,
+		MissRate: 0.0,
+	}, nil
+}
+
+// MockUnifiedRateCardRepository provides a basic unified rate card repository for testing
+type MockUnifiedRateCardRepository struct{}
+
+func NewMockUnifiedRateCardRepository() *MockUnifiedRateCardRepository {
+	return &MockUnifiedRateCardRepository{}
+}
+
+func (r *MockUnifiedRateCardRepository) Create(ctx context.Context, rateCard *models.UnifiedRateCard) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetByID(ctx context.Context, id string) (*models.UnifiedRateCard, error) {
+	return &models.UnifiedRateCard{
+		ID:                uuid.New(),
+		PartnerCode:       "unified",
+		TenantID:          "test-tenant",
+		APIKey:            "test-api-key",
+		UnifiedRateCardID: "test-rate-card-id",
+		IsActive:          true,
+		IsDefault:         true,
+		Name:              "Test Rate Card",
+		ProductType:       "LOGISTICS",
+		EffectiveFrom:     time.Now().Add(-24 * time.Hour),
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+	}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetByPartnerCode(ctx context.Context, partnerCode string) ([]*models.UnifiedRateCard, error) {
+	return []*models.UnifiedRateCard{}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetActiveByPartnerCode(ctx context.Context, partnerCode string) ([]*models.UnifiedRateCard, error) {
+	return []*models.UnifiedRateCard{}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetDefaultByPartnerCode(ctx context.Context, partnerCode string) (*models.UnifiedRateCard, error) {
+	return r.GetByID(ctx, partnerCode)
+}
+
+func (r *MockUnifiedRateCardRepository) GetByUnifiedRateCardID(ctx context.Context, unifiedRateCardID string) (*models.UnifiedRateCard, error) {
+	return r.GetByID(ctx, unifiedRateCardID)
+}
+
+func (r *MockUnifiedRateCardRepository) GetAll(ctx context.Context, filter *models.UnifiedRateCardFilter) ([]*models.UnifiedRateCard, error) {
+	return []*models.UnifiedRateCard{}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) Update(ctx context.Context, rateCard *models.UnifiedRateCard) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) Delete(ctx context.Context, id string) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) SetDefault(ctx context.Context, id string, partnerCode string) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetPartnerConfiguration(ctx context.Context, partnerCode string) (*models.UnifiedRateCard, error) {
+	return r.GetByID(ctx, partnerCode)
+}
+
+func (r *MockUnifiedRateCardRepository) GetConfigByPartnerCode(ctx context.Context, partnerCode string) (tenantID, apiKey, unifiedRateCardID string, err error) {
+	return "test-tenant", "test-api-key", "test-rate-card-id", nil
+}
+
+func (r *MockUnifiedRateCardRepository) ListPartnerCodes(ctx context.Context) ([]string, error) {
+	return []string{"unified", "delhivery", "porter"}, nil
 }

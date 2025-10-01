@@ -17,6 +17,7 @@ import (
 
 	"github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http/middleware"
 	routesv1 "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http/v1/routes"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
 )
@@ -58,15 +59,17 @@ type Server struct {
 	config *ServerConfig
 
 	// Dependencies
-	rateService interfaces.RateService
-	logger      interfaces.Logger
-	metrics     interfaces.MetricsCollector
+	rateService     interfaces.RateService
+	rateCardService *unified_rate.RateCardService
+	logger          interfaces.Logger
+	metrics         interfaces.MetricsCollector
 }
 
 // NewServer creates a new HTTP server instance
 func NewServer(
 	config *ServerConfig,
 	rateService interfaces.RateService,
+	rateCardService *unified_rate.RateCardService,
 	logger interfaces.Logger,
 	metrics interfaces.MetricsCollector,
 ) *Server {
@@ -75,10 +78,11 @@ func NewServer(
 	}
 
 	server := &Server{
-		config:      config,
-		rateService: rateService,
-		logger:      logger,
-		metrics:     metrics,
+		config:          config,
+		rateService:     rateService,
+		rateCardService: rateCardService,
+		logger:          logger,
+		metrics:         metrics,
 	}
 
 	server.app = server.createFiberApp()
@@ -238,6 +242,11 @@ func (s *Server) setupRoutes() {
 	// Version 1 routes directly under supply-rate
 	v1 := supplyRate.Group("/v1")
 	routesv1.SetupRateRoutes(v1, s.rateService, s.logger, s.metrics)
+
+	// Unified rate card management routes
+	if s.rateCardService != nil {
+		routesv1.SetupUnifiedRateCardRoutes(v1, s.rateCardService, s.logger, s.metrics)
+	}
 }
 
 func (s *Server) errorHandler(c *fiber.Ctx, err error) error {
@@ -375,10 +384,12 @@ func (s *Server) apiInfoHandler(c *fiber.Ctx) error {
 		"description": "A microservice for calculating shipping rates from multiple logistics partners",
 		"version":     constants.APIVersionV1,
 		"endpoints": fiber.Map{
-			"health":    "/supply-rate/health",
-			"metrics":   "/supply-rate/metrics",
-			"api_info":  "/supply-rate/",
-			"quotes_v1": "/supply-rate/v1/quotes",
+			"health":                        "/supply-rate/health",
+			"metrics":                       "/supply-rate/metrics",
+			"api_info":                      "/supply-rate/",
+			"quotes_v1":                     "/supply-rate/v1/quotes",
+			"unified_rate_cards":            "/supply-rate/v1/unified-rate-cards",
+			"unified_rate_cards_by_partner": "/supply-rate/v1/unified-rate-cards/partner/{partner_code}",
 		},
 		"documentation": "/docs",
 		"timestamp":     time.Now(),

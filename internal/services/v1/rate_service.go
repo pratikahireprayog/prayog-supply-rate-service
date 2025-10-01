@@ -19,6 +19,76 @@ import (
 	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
+// MockUnifiedRateCardRepository provides a basic unified rate card repository for testing
+type MockUnifiedRateCardRepository struct{}
+
+func (r *MockUnifiedRateCardRepository) Create(ctx context.Context, rateCard *models.UnifiedRateCard) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetByID(ctx context.Context, id string) (*models.UnifiedRateCard, error) {
+	return &models.UnifiedRateCard{
+		ID:                uuid.New(),
+		PartnerCode:       "unified",
+		Name:              "Test Rate Card",
+		ProductType:       "standard",
+		IsActive:          true,
+		IsDefault:         true,
+		EffectiveFrom:     time.Now().AddDate(0, 0, -30), // 30 days ago
+		EffectiveTo:       nil,                           // No end date
+		UnifiedRateCardID: "test-rate-card-id",
+		TenantID:          "test-tenant",
+		APIKey:            "test-api-key",
+		Config:            make(map[string]interface{}),
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+	}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetByPartnerCode(ctx context.Context, partnerCode string) ([]*models.UnifiedRateCard, error) {
+	return []*models.UnifiedRateCard{}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetActiveByPartnerCode(ctx context.Context, partnerCode string) ([]*models.UnifiedRateCard, error) {
+	return []*models.UnifiedRateCard{}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetDefaultByPartnerCode(ctx context.Context, partnerCode string) (*models.UnifiedRateCard, error) {
+	return r.GetByID(ctx, partnerCode)
+}
+
+func (r *MockUnifiedRateCardRepository) GetByUnifiedRateCardID(ctx context.Context, unifiedRateCardID string) (*models.UnifiedRateCard, error) {
+	return r.GetByID(ctx, unifiedRateCardID)
+}
+
+func (r *MockUnifiedRateCardRepository) GetAll(ctx context.Context, filter *models.UnifiedRateCardFilter) ([]*models.UnifiedRateCard, error) {
+	return []*models.UnifiedRateCard{}, nil
+}
+
+func (r *MockUnifiedRateCardRepository) Update(ctx context.Context, rateCard *models.UnifiedRateCard) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) Delete(ctx context.Context, id string) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) SetDefault(ctx context.Context, id string, partnerCode string) error {
+	return nil
+}
+
+func (r *MockUnifiedRateCardRepository) GetPartnerConfiguration(ctx context.Context, partnerCode string) (*models.UnifiedRateCard, error) {
+	return r.GetByID(ctx, partnerCode)
+}
+
+func (r *MockUnifiedRateCardRepository) GetConfigByPartnerCode(ctx context.Context, partnerCode string) (tenantID, apiKey, unifiedRateCardID string, err error) {
+	return "test-tenant", "test-api-key", "test-rate-card-id", nil
+}
+
+func (r *MockUnifiedRateCardRepository) ListPartnerCodes(ctx context.Context) ([]string, error) {
+	return []string{"unified", "delhivery", "porter"}, nil
+}
+
 // RateService implements the main rate calculation service
 type RateService struct {
 	factory      interfaces.RateFactory
@@ -277,7 +347,7 @@ func (s *RateService) RefreshProviders(ctx context.Context) error {
 	s.logger.Info("Starting implementation refresh")
 
 	// Get all active partners
-	partners, err := s.partnerRepo.GetActive(ctx)
+	partners, err := s.partnerRepo.GetActivePartners(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get active partners: %w", err)
 	}
@@ -333,7 +403,7 @@ func (s *RateService) getActivePartners(ctx context.Context, request *dtos.RateC
 	}
 
 	// Get all active partners
-	allPartners, err := s.partnerRepo.GetActive(ctx)
+	allPartners, err := s.partnerRepo.GetActivePartners(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -997,24 +1067,28 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "dhl":
 		s.logger.Info("Creating DHL service", "partner_code", normalizedCode)
 		return dhl.NewService(s.logger, s.metrics, s.httpClient), nil
-	case "fedex":
-		return nil, fmt.Errorf("FedEx implementation not yet available")
+	// case "fedex":
+	//	return nil, fmt.Errorf("FedEx implementation not yet available")
 	case "ups":
 		return nil, fmt.Errorf("UPS implementation not yet available")
 	case "blue_dart":
 		return nil, fmt.Errorf("Blue Dart implementation not yet available")
 	case "delhivery":
 		s.logger.Info("Redirecting Delhivery to Unified Rate service", "partner_code", normalizedCode)
-		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo), nil
 	case "porter":
 		s.logger.Info("Redirecting Porter to Unified Rate service", "partner_code", normalizedCode)
-		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo), nil
 	case "unified":
 		s.logger.Info("Creating Unified Rate service", "partner_code", normalizedCode)
-		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo), nil
 	case "prayog":
 		s.logger.Info("Creating Unified Rate service", "partner_code", normalizedCode)
-		return unified_rate.NewService(s.logger, s.metrics, s.httpClient), nil
+		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
+		return unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo), nil
 	case "dunzo":
 		return nil, fmt.Errorf("Dunzo implementation not yet available")
 	case "aramex":
@@ -1087,7 +1161,7 @@ func (s *RateService) RefreshImplementations(ctx context.Context) error {
 	s.logger.Info("Starting implementation refresh")
 
 	// Get all active partners
-	partners, err := s.partnerRepo.GetActive(ctx)
+	partners, err := s.partnerRepo.GetActivePartners(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get active partners", "error", err)
 		return fmt.Errorf("failed to get active partners: %w", err)

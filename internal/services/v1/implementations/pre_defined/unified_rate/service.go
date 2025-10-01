@@ -16,7 +16,7 @@ type Service struct {
 	metrics       interfaces.MetricsCollector
 	httpClient    interfaces.HTTPClient
 	config        *Config
-	authService   *AuthService
+	rateCardRepo  interfaces.UnifiedRateCardRepository
 	isInitialized bool
 }
 
@@ -25,13 +25,14 @@ func NewService(
 	logger interfaces.Logger,
 	metrics interfaces.MetricsCollector,
 	httpClient interfaces.HTTPClient,
+	rateCardRepo interfaces.UnifiedRateCardRepository,
 ) *Service {
 	return &Service{
-		logger:      logger,
-		metrics:     metrics,
-		httpClient:  httpClient,
-		config:      NewDefaultConfig(),
-		authService: NewAuthService(httpClient, logger),
+		logger:       logger,
+		metrics:      metrics,
+		httpClient:   httpClient,
+		rateCardRepo: rateCardRepo,
+		config:       NewDefaultConfig(),
 	}
 }
 
@@ -54,31 +55,9 @@ func (s *Service) Initialize(config map[string]interface{}) error {
 		return fmt.Errorf("failed to update configuration: %w", err)
 	}
 
-	// Validate configuration
-	if err := s.config.Validate(); err != nil {
-		return fmt.Errorf("configuration validation failed: %w", err)
-	}
-
 	// Set HTTP client timeout
 	s.httpClient.SetTimeout(time.Duration(s.config.TimeoutMs) * time.Millisecond)
 	s.httpClient.SetRetryCount(s.config.RetryCount)
-
-	// Configure authentication service
-	authConfig := map[string]interface{}{
-		"login_url":              s.config.LoginURL,
-		"username":               s.config.Username,
-		"password":               s.config.Password,
-		"signin_type":            s.config.SigninType,
-		"timeout_ms":             s.config.TimeoutMs,
-		"refresh_buffer_minutes": s.config.RefreshBufferMinutes,
-	}
-	if err := s.authService.UpdateConfig(authConfig); err != nil {
-		return fmt.Errorf("failed to configure authentication service: %w", err)
-	}
-
-	if err := s.authService.ValidateConfig(); err != nil {
-		return fmt.Errorf("authentication configuration validation failed: %w", err)
-	}
 
 	s.isInitialized = true
 
@@ -92,46 +71,19 @@ func (s *Service) Initialize(config map[string]interface{}) error {
 
 // GetConfiguration returns the service configuration
 func (s *Service) GetConfiguration() map[string]interface{} {
-	config := map[string]interface{}{
-		"provider_type":          "pre_defined",
-		"base_url":               s.config.BaseURL,
-		"timeout_ms":             s.config.TimeoutMs,
-		"retry_count":            s.config.RetryCount,
-		"cache_ttl_minutes":      s.config.CacheTTLMinutes,
-		"is_initialized":         s.isInitialized,
-		"login_url":              s.config.LoginURL,
-		"username":               s.config.Username,
-		"signin_type":            s.config.SigninType,
-		"refresh_buffer_minutes": s.config.RefreshBufferMinutes,
+	return map[string]interface{}{
+		"provider_type":     "pre_defined",
+		"base_url":          s.config.BaseURL,
+		"timeout_ms":        s.config.TimeoutMs,
+		"retry_count":       s.config.RetryCount,
+		"cache_ttl_minutes": s.config.CacheTTLMinutes,
+		"is_initialized":    s.isInitialized,
 	}
-
-	// Add authentication status
-	if s.authService != nil {
-		config["is_authenticated"] = s.authService.IsAuthenticated()
-		if tokenInfo := s.authService.GetTokenInfo(); tokenInfo != nil {
-			config["auth_info"] = map[string]interface{}{
-				"user_email":  tokenInfo.UserEmail,
-				"user_id":     tokenInfo.UserID,
-				"tenant_id":   tokenInfo.TenantID,
-				"token_type":  tokenInfo.TokenType,
-				"expires_in":  tokenInfo.ExpiresIn,
-				"obtained_at": tokenInfo.ObtainedAt,
-			}
-		}
-	}
-
-	return config
 }
 
 // Close gracefully shuts down the service
 func (s *Service) Close() error {
 	s.isInitialized = false
-
-	// Clear authentication token
-	if s.authService != nil {
-		s.authService.ClearToken()
-	}
-
 	s.logger.Info("Unified Rate service closed")
 	return nil
 }
@@ -160,8 +112,10 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 		return nil, fmt.Errorf("failed to convert request to unified API format: %w", err)
 	}
 
-	// Call unified API
-	unifiedResponse, err := s.callUnifiedAPI(ctx, unifiedRequest)
+	// Call unified API with partner code - for unified rate, we use "unified" as default
+	partnerCode := "unified"
+
+	unifiedResponse, err := s.callUnifiedAPI(ctx, unifiedRequest, partnerCode)
 	if err != nil {
 		s.metrics.IncrementCounter("unified_api_call_failed", map[string]string{
 			"error": "api_call",
@@ -192,17 +146,6 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 func (s *Service) IsHealthy(ctx context.Context) error {
 	if !s.isInitialized {
 		return fmt.Errorf("unified service not initialized")
-	}
-
-	// Check authentication service health
-	if s.authService == nil {
-		return fmt.Errorf("authentication service not initialized")
-	}
-
-	// Test authentication by getting a token
-	_, err := s.authService.GetBearerToken(ctx)
-	if err != nil {
-		return fmt.Errorf("authentication health check failed: %w", err)
 	}
 
 	// Perform a simple health check by calling a lightweight endpoint
@@ -317,18 +260,18 @@ func (s *Service) convertFromUnifiedAPIResponse(
 }
 
 // callUnifiedAPI makes the actual API call to unified rate calculation endpoint
-func (s *Service) callUnifiedAPI(ctx context.Context, request *UnifiedRateRequest) (*UnifiedRateResponse, error) {
-	// Get bearer token from auth service
-	bearerToken, err := s.authService.GetBearerToken(ctx)
+func (s *Service) callUnifiedAPI(ctx context.Context, request *UnifiedRateRequest, partnerCode string) (*UnifiedRateResponse, error) {
+	// Get API configuration for the partner
+	_, apiKey, _, err := s.rateCardRepo.GetConfigByPartnerCode(ctx, partnerCode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get authentication token: %w", err)
+		return nil, fmt.Errorf("failed to get partner configuration: %w", err)
 	}
 
-	// Prepare headers with bearer token authentication
+	// Prepare headers with API key authentication
 	headers := map[string]string{
-		"Content-Type":  "application/json",
-		"Accept":        "*/*",
-		"Authorization": bearerToken,
+		"Content-Type": "application/json",
+		"Accept":       "*/*",
+		"api-key":      apiKey,
 	}
 
 	// Make HTTP request to the rate calculation endpoint
@@ -336,7 +279,8 @@ func (s *Service) callUnifiedAPI(ctx context.Context, request *UnifiedRateReques
 
 	s.logger.Debug("Calling unified API",
 		"url", url,
-		"method", "POST")
+		"method", "POST",
+		"partner_code", partnerCode)
 
 	httpResponse, err := s.httpClient.Post(ctx, url, request, headers)
 	if err != nil {
@@ -384,7 +328,8 @@ func (s *Service) performHealthCheck(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	_, err := s.callUnifiedAPI(ctx, testRequest)
+	// Use "unified" as default partner code for health check
+	_, err := s.callUnifiedAPI(ctx, testRequest, "unified")
 	return err
 }
 

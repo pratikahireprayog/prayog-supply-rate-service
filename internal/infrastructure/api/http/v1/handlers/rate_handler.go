@@ -88,7 +88,7 @@ func (h *RateHandler) GetQuotes(c *fiber.Ctx) error {
 	duration := time.Since(startTime)
 	h.metrics.IncrementCounter("quotes_success", map[string]string{
 		"endpoint":       "get_quotes",
-		"total_partners": fmt.Sprintf("%d", response.Summary.TotalPartners),
+		"total_partners": fmt.Sprintf("%d", response.Metadata.PartnersQueried),
 	})
 	h.metrics.RecordTimer("quotes_duration", duration, map[string]string{
 		"endpoint": "get_quotes",
@@ -96,12 +96,12 @@ func (h *RateHandler) GetQuotes(c *fiber.Ctx) error {
 
 	h.logger.Info("Quote request completed",
 		"request_id", requestID,
-		"total_partners", response.Summary.TotalPartners,
-		"successful_partners", response.Summary.SuccessfulPartners,
-		"total_rates", response.Summary.TotalRatesFound,
+		"total_partners", response.Metadata.PartnersQueried,
+		"successful_partners", response.Metadata.PartnersSucceeded,
+		"total_rates", response.Metadata.TotalRatesFound,
 		"duration_ms", duration.Milliseconds())
 
-	return c.Status(fiber.StatusOK).JSON(utils.SuccessResponse(response))
+	return c.Status(fiber.StatusOK).JSON(response)
 }
 
 // GetImplementationHealth handles GET /implementations/health

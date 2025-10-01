@@ -105,29 +105,7 @@ type RateService interface {
 	RefreshImplementations(ctx context.Context) error
 }
 
-// PartnerRepository defines the interface for partner data access
-type PartnerRepository interface {
-	// GetByID retrieves a partner by ID
-	GetByID(ctx context.Context, id string) (*models.Partner, error)
-
-	// GetByType retrieves partners by type
-	GetByType(ctx context.Context, partnerType models.PartnerType) ([]*models.Partner, error)
-
-	// GetActive retrieves all active partners
-	GetActive(ctx context.Context) ([]*models.Partner, error)
-
-	// Create creates a new partner
-	Create(ctx context.Context, partner *models.Partner) error
-
-	// Update updates an existing partner
-	Update(ctx context.Context, partner *models.Partner) error
-
-	// Delete deletes a partner
-	Delete(ctx context.Context, id string) error
-
-	// UpdateHealthStatus updates the health status of a partner
-	UpdateHealthStatus(ctx context.Context, id string, status string) error
-}
+// Note: PartnerRepository interface is defined in repository.go
 
 // RateRepository defines the interface for rate data access
 type RateRepository interface {

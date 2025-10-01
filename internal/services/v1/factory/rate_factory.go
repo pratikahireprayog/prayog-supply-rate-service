@@ -118,8 +118,8 @@ func (f *RateFactory) CreateImplementation(implementationType dtos.ProviderType,
 	return implementation, nil
 }
 
-// RegisterProvider registers a new implementation implementation
-func (f *RateFactory) RegisterProvider(implementationType dtos.ProviderType, creator interfaces.ImplementationCreator) error {
+// RegisterImplementation registers a new implementation implementation
+func (f *RateFactory) RegisterImplementation(implementationType dtos.ProviderType, creator interfaces.ImplementationCreator) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -137,8 +137,8 @@ func (f *RateFactory) RegisterProvider(implementationType dtos.ProviderType, cre
 	return nil
 }
 
-// GetRegisteredProviders returns all registered implementation types
-func (f *RateFactory) GetRegisteredProviders() []dtos.ProviderType {
+// GetRegisteredImplementations returns all registered implementation types
+func (f *RateFactory) GetRegisteredImplementations() []dtos.ProviderType {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -150,8 +150,8 @@ func (f *RateFactory) GetRegisteredProviders() []dtos.ProviderType {
 	return types
 }
 
-// IsProviderRegistered checks if a implementation type is registered
-func (f *RateFactory) IsProviderRegistered(implementationType dtos.ProviderType) bool {
+// IsImplementationRegistered checks if a implementation type is registered
+func (f *RateFactory) IsImplementationRegistered(implementationType dtos.ProviderType) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -159,8 +159,8 @@ func (f *RateFactory) IsProviderRegistered(implementationType dtos.ProviderType)
 	return exists
 }
 
-// GetProviderInstance gets an existing implementation instance
-func (f *RateFactory) GetProviderInstance(partnerID string) (interfaces.RateImplementation, error) {
+// GetImplementationInstance gets an existing implementation instance
+func (f *RateFactory) GetImplementationInstance(partnerID string) (interfaces.RateImplementation, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -172,8 +172,8 @@ func (f *RateFactory) GetProviderInstance(partnerID string) (interfaces.RateImpl
 	return implementation, nil
 }
 
-// RemoveProviderInstance removes a implementation instance
-func (f *RateFactory) RemoveProviderInstance(partnerID string) error {
+// RemoveImplementationInstance removes a implementation instance
+func (f *RateFactory) RemoveImplementationInstance(partnerID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

@@ -11,13 +11,6 @@ type Config struct {
 	BaseURL                string `json:"base_url"`
 	CalculateRatesEndpoint string `json:"calculate_rates_endpoint"`
 
-	// Authentication Configuration
-	LoginURL             string `json:"login_url"`
-	Username             string `json:"username"`
-	Password             string `json:"password"`
-	SigninType           string `json:"signin_type"`
-	RefreshBufferMinutes int    `json:"refresh_buffer_minutes"`
-
 	// HTTP Configuration
 	TimeoutMs  int `json:"timeout_ms"`
 	RetryCount int `json:"retry_count"`
@@ -46,13 +39,6 @@ func NewDefaultConfig() *Config {
 		// API Configuration
 		BaseURL:                "https://sandbox-apis.prayog.io/gateway/ure/api",
 		CalculateRatesEndpoint: "/external-rate-calculation/calculate",
-
-		// Authentication Configuration
-		LoginURL:             "https://sandbox-apis.prayog.io/auth/login",
-		Username:             "avinash.singh@prayog.io",
-		Password:             "Prayog@Avinash539",
-		SigninType:           "EMAIL",
-		RefreshBufferMinutes: 30,
 
 		// HTTP Configuration
 		TimeoutMs:  30000, // 30 seconds
@@ -89,26 +75,6 @@ func (c *Config) UpdateFromMap(configMap map[string]interface{}) error {
 	}
 	if endpoint, ok := configMap["calculate_rates_endpoint"].(string); ok {
 		c.CalculateRatesEndpoint = endpoint
-	}
-
-	// Update Authentication configuration
-	if loginURL, ok := configMap["login_url"].(string); ok {
-		c.LoginURL = loginURL
-	}
-	if username, ok := configMap["username"].(string); ok {
-		c.Username = username
-	}
-	if password, ok := configMap["password"].(string); ok {
-		c.Password = password
-	}
-	if signinType, ok := configMap["signin_type"].(string); ok {
-		c.SigninType = signinType
-	}
-	if refreshBuffer, ok := configMap["refresh_buffer_minutes"].(int); ok {
-		c.RefreshBufferMinutes = refreshBuffer
-	}
-	if refreshBuffer, ok := configMap["refresh_buffer_minutes"].(float64); ok {
-		c.RefreshBufferMinutes = int(refreshBuffer)
 	}
 
 	// Update HTTP configuration
@@ -195,20 +161,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("calculate_rates_endpoint is required")
 	}
 
-	// Validate authentication configuration
-	if c.LoginURL == "" {
-		return fmt.Errorf("login_url is required")
-	}
-	if c.Username == "" {
-		return fmt.Errorf("username is required")
-	}
-	if c.Password == "" {
-		return fmt.Errorf("password is required")
-	}
-	if c.SigninType == "" {
-		return fmt.Errorf("signin_type is required")
-	}
-
 	// Validate timeout
 	if c.TimeoutMs <= 0 {
 		return fmt.Errorf("timeout_ms must be positive")
@@ -234,14 +186,6 @@ func (c *Config) Validate() error {
 	}
 	if c.CacheTTLMinutes > 1440 { // 24 hours
 		return fmt.Errorf("cache_ttl_minutes should not exceed 1440 minutes (24 hours)")
-	}
-
-	// Validate refresh buffer
-	if c.RefreshBufferMinutes < 0 {
-		return fmt.Errorf("refresh_buffer_minutes cannot be negative")
-	}
-	if c.RefreshBufferMinutes > 120 { // 2 hours
-		return fmt.Errorf("refresh_buffer_minutes should not exceed 120 minutes")
 	}
 
 	// Validate currency
@@ -293,11 +237,6 @@ func (c *Config) ToMap() map[string]interface{} {
 	return map[string]interface{}{
 		"base_url":                 c.BaseURL,
 		"calculate_rates_endpoint": c.CalculateRatesEndpoint,
-		"login_url":                c.LoginURL,
-		"username":                 c.Username,
-		"password":                 "***HIDDEN***", // Don't expose password in serialization
-		"signin_type":              c.SigninType,
-		"refresh_buffer_minutes":   c.RefreshBufferMinutes,
 		"timeout_ms":               c.TimeoutMs,
 		"retry_count":              c.RetryCount,
 		"cache_ttl_minutes":        c.CacheTTLMinutes,

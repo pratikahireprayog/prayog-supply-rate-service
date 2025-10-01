@@ -12,12 +12,20 @@ var (
 	ErrNoRatesAvailable    = errors.New("no rates available for the given criteria")
 
 	// Partner-related errors
-	ErrPartnerNotFound     = errors.New("partner not found")
-	ErrPartnerInactive     = errors.New("partner is inactive")
-	ErrPartnerUnhealthy    = errors.New("partner is unhealthy")
-	ErrPartnerTimeout      = errors.New("partner request timeout")
-	ErrPartnerAPIError     = errors.New("partner API error")
-	ErrPartnerNotSupported = errors.New("partner type not supported")
+	ErrPartnerNotFound          = errors.New("partner not found")
+	ErrPartnerInactive          = errors.New("partner is inactive")
+	ErrPartnerUnhealthy         = errors.New("partner is unhealthy")
+	ErrPartnerTimeout           = errors.New("partner request timeout")
+	ErrPartnerAPIError          = errors.New("partner API error")
+	ErrPartnerNotSupported      = errors.New("partner type not supported")
+	ErrInvalidPartnerID         = errors.New("invalid partner ID")
+	ErrPartnerCodeAlreadyExists = errors.New("partner code already exists")
+
+	// Rate card related errors
+	ErrRateCardNotFound  = errors.New("rate card not found")
+	ErrInvalidRateCardID = errors.New("invalid rate card ID")
+	ErrRateCardExpired   = errors.New("rate card has expired")
+	ErrRateCardInactive  = errors.New("rate card is inactive")
 
 	// Implementation factory errors
 	ErrImplementationNotFound      = errors.New("rate implementation not found")
@@ -88,12 +96,20 @@ const (
 	CodeNoRatesAvailable    ErrorCode = "NO_RATES_AVAILABLE"
 
 	// Partner-related error codes
-	CodePartnerNotFound     ErrorCode = "PARTNER_NOT_FOUND"
-	CodePartnerInactive     ErrorCode = "PARTNER_INACTIVE"
-	CodePartnerUnhealthy    ErrorCode = "PARTNER_UNHEALTHY"
-	CodePartnerTimeout      ErrorCode = "PARTNER_TIMEOUT"
-	CodePartnerAPIError     ErrorCode = "PARTNER_API_ERROR"
-	CodePartnerNotSupported ErrorCode = "PARTNER_NOT_SUPPORTED"
+	CodePartnerNotFound          ErrorCode = "PARTNER_NOT_FOUND"
+	CodePartnerInactive          ErrorCode = "PARTNER_INACTIVE"
+	CodePartnerUnhealthy         ErrorCode = "PARTNER_UNHEALTHY"
+	CodePartnerTimeout           ErrorCode = "PARTNER_TIMEOUT"
+	CodePartnerAPIError          ErrorCode = "PARTNER_API_ERROR"
+	CodePartnerNotSupported      ErrorCode = "PARTNER_NOT_SUPPORTED"
+	CodeInvalidPartnerID         ErrorCode = "INVALID_PARTNER_ID"
+	CodePartnerCodeAlreadyExists ErrorCode = "PARTNER_CODE_ALREADY_EXISTS"
+
+	// Rate card related error codes
+	CodeRateCardNotFound  ErrorCode = "RATE_CARD_NOT_FOUND"
+	CodeInvalidRateCardID ErrorCode = "INVALID_RATE_CARD_ID"
+	CodeRateCardExpired   ErrorCode = "RATE_CARD_EXPIRED"
+	CodeRateCardInactive  ErrorCode = "RATE_CARD_INACTIVE"
 
 	// Implementation factory error codes
 	CodeImplementationNotFound      ErrorCode = "IMPLEMENTATION_NOT_FOUND"
@@ -167,6 +183,18 @@ func ErrorToCode(err error) ErrorCode {
 		return CodePartnerAPIError
 	case ErrPartnerNotSupported:
 		return CodePartnerNotSupported
+	case ErrInvalidPartnerID:
+		return CodeInvalidPartnerID
+	case ErrPartnerCodeAlreadyExists:
+		return CodePartnerCodeAlreadyExists
+	case ErrRateCardNotFound:
+		return CodeRateCardNotFound
+	case ErrInvalidRateCardID:
+		return CodeInvalidRateCardID
+	case ErrRateCardExpired:
+		return CodeRateCardExpired
+	case ErrRateCardInactive:
+		return CodeRateCardInactive
 	case ErrImplementationNotFound:
 		return CodeImplementationNotFound
 	case ErrImplementationNotRegistered:
