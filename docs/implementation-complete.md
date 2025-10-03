@@ -385,3 +385,4 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
 ```
 
 **🎊 CONGRATULATIONS! The Prayog Unified Rate implementation is 100% complete and ready for use! 🎊**
+

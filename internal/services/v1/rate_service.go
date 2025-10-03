@@ -981,19 +981,42 @@ func (s *RateService) convertQuoteRequestToRateRequest(req *dtos.QuoteRequest) *
 		totalWeight += pkg.Weight.Value
 	}
 
+	// Convert packages to internal format with actual dimensions
+	packages := make([]dtos.PackageDetails, 0, len(req.Packages))
+	for _, pkg := range req.Packages {
+		packages = append(packages, dtos.PackageDetails{
+			Weight:     pkg.Weight.Value,
+			WeightUnit: pkg.Weight.Unit,
+			Length:     pkg.Dimensions.Length,
+			Width:      pkg.Dimensions.Width,
+			Height:     pkg.Dimensions.Height,
+			DimUnit:    pkg.Dimensions.Unit,
+		})
+	}
+
+	// Set pickup date to two days from now at 10:00 AM (business hours) and delivery two days after pickup
+	now := time.Now()
+	pickupFuture := now.AddDate(0, 0, 2)
+	pickupDate := time.Date(pickupFuture.Year(), pickupFuture.Month(), pickupFuture.Day(), 10, 0, 0, 0, pickupFuture.Location())
+	deliveryFuture := pickupDate.AddDate(0, 0, 2)
+	deliveryDate := time.Date(deliveryFuture.Year(), deliveryFuture.Month(), deliveryFuture.Day(), 18, 0, 0, 0, deliveryFuture.Location())
+
 	return &dtos.RateCalculationRequest{
-		RequestID:    uuid.New().String(),
-		CustomerID:   "default", // Default customer ID
-		OriginCity:   req.SourceLocation.PostalCode,
-		DestCity:     req.DestinationLocation.PostalCode,
-		Weight:       totalWeight,
-		Distance:     0, // Will be calculated if needed
-		ServiceType:  serviceType,
-		Currency:     currency,
-		PickupDate:   time.Now(),
-		DeliveryDate: time.Now().AddDate(0, 0, 1), // Default next day
-		Priority:     "normal",
-		Source:       "api",
+		RequestID:     uuid.New().String(),
+		CustomerID:    "default", // Default customer ID
+		OriginCity:    req.SourceLocation.PostalCode,
+		DestCity:      req.DestinationLocation.PostalCode,
+		OriginCountry: req.SourceLocation.CountryCode,      // Add country codes
+		DestCountry:   req.DestinationLocation.CountryCode, // Add country codes
+		Weight:        totalWeight,
+		Distance:      0, // Will be calculated if needed
+		ServiceType:   serviceType,
+		Currency:      currency,
+		PickupDate:    pickupDate,   // Two days from now at 10:00 AM
+		DeliveryDate:  deliveryDate, // Two days after pickup at 6:00 PM
+		Priority:      "normal",
+		Source:        "api",
+		Packages:      packages, // Add actual packages with dimensions
 	}
 }
 

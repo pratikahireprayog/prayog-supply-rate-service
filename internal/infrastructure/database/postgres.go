@@ -226,3 +226,4 @@ type gormLogWriter struct {
 func (w *gormLogWriter) Printf(format string, v ...interface{}) {
 	w.logger.Info(fmt.Sprintf(format, v...))
 }
+

@@ -77,10 +77,16 @@ func (h *UnifiedRateCardHandler) CreateRateCard(c *fiber.Ctx) error {
 		))
 	}
 
+	// Extract user information from auth context for audit logging
+	userID := extractUserID(c)
+	req.CreatedBy = userID
+	req.UpdatedBy = userID
+
 	h.logger.Info("Creating unified rate card",
 		"request_id", requestID,
 		"partner_code", req.PartnerCode,
-		"name", req.Name)
+		"name", req.Name,
+		"created_by", userID)
 
 	// Call service
 	response, err := h.rateCardService.CreateRateCard(c.Context(), &req, &rateCardData)
@@ -192,10 +198,15 @@ func (h *UnifiedRateCardHandler) UpdateRateCard(c *fiber.Ctx) error {
 		))
 	}
 
+	// Extract user information from auth context for audit logging
+	userID := extractUserID(c)
+	req.UpdatedBy = userID
+
 	h.logger.Info("Updating unified rate card",
 		"request_id", requestID,
 		"rate_card_id", id,
-		"partner_code", req.PartnerCode)
+		"partner_code", req.PartnerCode,
+		"updated_by", userID)
 
 	// Call service
 	response, err := h.rateCardService.UpdateRateCard(c.Context(), id, &req, &rateCardData)
@@ -425,4 +436,23 @@ func (h *UnifiedRateCardHandler) SetDefaultRateCard(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(utils.SuccessResponse(fiber.Map{
 		"message": "Rate card set as default successfully",
 	}))
+}
+
+// extractUserID extracts user ID from authentication context
+// Returns the API key or a default value if not authenticated
+func extractUserID(c *fiber.Ctx) string {
+	// Try to get API key from context (set by auth middleware)
+	if apiKey := c.Locals("api_key"); apiKey != nil {
+		if keyStr, ok := apiKey.(string); ok {
+			return keyStr
+		}
+	}
+
+	// Try to get from header directly
+	if apiKey := c.Get("X-API-Key"); apiKey != "" {
+		return apiKey
+	}
+
+	// Fallback to system
+	return "system"
 }

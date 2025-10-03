@@ -85,12 +85,20 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 		return nil, fmt.Errorf("DHL service not initialized")
 	}
 
+	// Validate request before making API call
+	if err := s.validateRequest(request); err != nil {
+		return nil, fmt.Errorf("request validation failed: %w", err)
+	}
+
 	startTime := time.Now()
 	s.logger.Info("Fetching rates from DHL API",
 		"request_id", request.RequestID,
 		"origin", request.OriginCity,
+		"origin_country", request.OriginCountry,
 		"destination", request.DestCity,
-		"weight", request.Weight)
+		"dest_country", request.DestCountry,
+		"weight", request.Weight,
+		"packages", len(request.Packages))
 
 	// Convert our request to DHL format
 	dhlRequest, err := s.convertToDHLRequest(request)
@@ -122,26 +130,53 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 
 // convertToDHLRequest converts our request format to DHL API format
 func (s *Service) convertToDHLRequest(req *dtos.RateCalculationRequest) (map[string]interface{}, error) {
-	// Map service type to DHL product codes
-	productCode := s.mapServiceToProductCode(req.ServiceType)
+	// Use hardcoded product code - "P" for Express Worldwide (default)
+	productCode := "P"
+
+	// Determine if customs declaration is needed (international shipment)
+	isInternational := req.OriginCountry != req.DestCountry
+
+	// Build DHL packages from request packages
+	dhlPackages := make([]map[string]interface{}, 0, len(req.Packages))
+	for _, pkg := range req.Packages {
+		// Convert weight to kg
+		weightKg := convertWeightToKg(pkg.Weight, pkg.WeightUnit)
+
+		// Convert dimensions to cm
+		lengthCm := convertDimensionToCm(pkg.Length, pkg.DimUnit)
+		widthCm := convertDimensionToCm(pkg.Width, pkg.DimUnit)
+		heightCm := convertDimensionToCm(pkg.Height, pkg.DimUnit)
+
+		dhlPackage := map[string]interface{}{
+			"weight": weightKg,
+			"dimensions": map[string]interface{}{
+				"length": lengthCm,
+				"width":  widthCm,
+				"height": heightCm,
+			},
+		}
+		dhlPackages = append(dhlPackages, dhlPackage)
+	}
+
+	// Use hard-coded city names (city will be provided in request body in future)
+	originCityName := "Bangalore"
+	destCityName := "Mumbai"
+
+	// Format pickup date with explicit GMT suffix (e.g., 2025-10-02T10:00:00GMT+05:30)
+	pickupTimeLocal := req.PickupDate
+	pickupDateString := pickupTimeLocal.Format("2006-01-02T15:04:05") + "GMT" + pickupTimeLocal.Format("Z07:00")
 
 	dhlRequest := map[string]interface{}{
 		"customerDetails": map[string]interface{}{
 			"shipperDetails": map[string]interface{}{
 				"postalCode":  req.OriginCity,
-				"cityName":    s.getCityNameFromPostalCode(req.OriginCity),
-				"countryCode": "IN", // Default - should be extracted from request
+				"cityName":    originCityName,
+				"countryCode": req.OriginCountry,
 			},
 			"receiverDetails": map[string]interface{}{
 				"postalCode":  req.DestCity,
-				"cityName":    s.getCityNameFromPostalCode(req.DestCity),
-				"countryCode": "CN", // Default - should be extracted from request
-			},
-		},
-		"accounts": []map[string]interface{}{
-			{
-				"typeCode": "shipper",
-				"number":   s.config.AccountNumber,
+				"cityName":    destCityName,
+				"countryCode": req.DestCountry,
 			},
 		},
 		"productsAndServices": []map[string]interface{}{
@@ -150,48 +185,29 @@ func (s *Service) convertToDHLRequest(req *dtos.RateCalculationRequest) (map[str
 				"localProductCode": productCode,
 			},
 		},
-		"payerCountryCode":           "IN",
-		"plannedShippingDateAndTime": req.PickupDate.Format("2006-01-02T15:04:05GMT-07:00"),
+		"payerCountryCode":           req.OriginCountry,
+		"plannedShippingDateAndTime": pickupDateString,
 		"unitOfMeasurement":          "metric",
-		"isCustomsDeclarable":        true,
+		"isCustomsDeclarable":        isInternational,
 		"estimatedDeliveryDate": map[string]interface{}{
 			"isRequested": true,
 			"typeCode":    "QDDC",
 		},
 		"returnStandardProductsOnly": true,
-		"packages": []map[string]interface{}{
+		"packages":                   dhlPackages,
+	}
+
+	// Add accounts only if account number is provided
+	if s.config.AccountNumber != "" {
+		dhlRequest["accounts"] = []map[string]interface{}{
 			{
-				"weight": req.Weight,
-				"dimensions": map[string]interface{}{
-					"length": 30, // Default dimensions - should be from packages
-					"width":  20,
-					"height": 15,
-				},
+				"typeCode": "shipper",
+				"number":   s.config.AccountNumber,
 			},
-		},
+		}
 	}
 
 	return dhlRequest, nil
-}
-
-// getCityNameFromPostalCode returns a city name for the postal code (simplified mapping)
-func (s *Service) getCityNameFromPostalCode(postalCode string) string {
-	// This is a simplified mapping - in production, use a proper postal code service
-	cityMap := map[string]string{
-		"560001": "Bangalore",
-		"560086": "Bangalore",
-		"110001": "New Delhi",
-		"400001": "Mumbai",
-		"600001": "Chennai",
-		"700001": "Kolkata",
-		"266001": "Qing Dao",
-	}
-
-	if city, exists := cityMap[postalCode]; exists {
-		return city
-	}
-
-	return postalCode // Fallback to postal code itself
 }
 
 // mapServiceToProductCode maps our service types to DHL product codes
@@ -213,7 +229,7 @@ func (s *Service) callDHLAPI(ctx context.Context, request map[string]interface{}
 	// Prepare headers
 	headers := map[string]string{
 		"accept":                           "application/json",
-		"Authorization":                    fmt.Sprintf("Basic %s", s.config.Credentials),
+		"Authorization":                    fmt.Sprintf("Basic %s", s.config.BasicAuth),
 		"Content-Type":                     "application/json",
 		"x-version":                        "2.12.0",
 		"Message-Reference":                uuid.New().String(),
@@ -224,8 +240,16 @@ func (s *Service) callDHLAPI(ctx context.Context, request map[string]interface{}
 		"Shipping-System-Platform-Version": "1.0.0",
 	}
 
+	// Construct full endpoint URL
+	endpoint := s.config.BaseURL + "/rates?strictValidation=false"
+
+	// Log the request for debugging
+	if requestJSON, err := json.MarshalIndent(request, "", "  "); err == nil {
+		s.logger.Debug("DHL API Request", "endpoint", endpoint, "request", string(requestJSON))
+	}
+
 	// Make HTTP request
-	httpResponse, err := s.httpClient.Post(ctx, s.config.BaseURL+"?strictValidation=false", request, headers)
+	httpResponse, err := s.httpClient.Post(ctx, endpoint, request, headers)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}

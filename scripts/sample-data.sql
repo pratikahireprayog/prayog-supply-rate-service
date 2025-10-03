@@ -56,3 +56,4 @@ VALUES
 
 -- Sample rates for porter
 (gen_random_uuid(), 'porter', 'express', '560001', '560100', 0, 1, 0, 50, 75.00, 0.15, 30.00, 'INR', '2025-01-01'::timestamp, '2026-12-31'::timestamp, true, now(), now());
+

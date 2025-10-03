@@ -22,6 +22,13 @@ type RateCalculationRequest struct {
 	Priority     string    `json:"priority" validate:"required,oneof=low normal high urgent"`
 	Currency     string    `json:"currency" validate:"required,oneof=INR USD EUR"`
 
+	// Location details (for international shipping)
+	OriginCountry string `json:"origin_country" validate:"required,len=2"` // ISO 3166-1 alpha-2
+	DestCountry   string `json:"dest_country" validate:"required,len=2"`   // ISO 3166-1 alpha-2
+
+	// Package information (for accurate pricing)
+	Packages []PackageDetails `json:"packages" validate:"required,dive"`
+
 	// Optional filters
 	PartnerIDs    []string `json:"partner_ids,omitempty"`
 	ProviderTypes []string `json:"provider_types,omitempty" validate:"dive,oneof=pre_defined real_time"`
@@ -38,6 +45,16 @@ type RateCalculationRequest struct {
 	Source    string `json:"source" validate:"required,oneof=api web mobile batch"`
 	UserAgent string `json:"user_agent,omitempty"`
 	IPAddress string `json:"ip_address,omitempty"`
+}
+
+// PackageDetails represents detailed package information
+type PackageDetails struct {
+	Weight     float64 `json:"weight" validate:"required,min=0.1"`
+	WeightUnit string  `json:"weight_unit" validate:"required,oneof=kg g lb"`
+	Length     float64 `json:"length" validate:"required,min=0.1"`
+	Width      float64 `json:"width" validate:"required,min=0.1"`
+	Height     float64 `json:"height" validate:"required,min=0.1"`
+	DimUnit    string  `json:"dimension_unit" validate:"required,oneof=cm in mm"`
 }
 
 // RateCalculationResponse represents the response from rate calculation

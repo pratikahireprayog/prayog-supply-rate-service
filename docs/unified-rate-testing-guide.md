@@ -491,3 +491,4 @@ curl -X POST http://localhost:9046/supply-rate/v1/quotes \
    - Verify interface implementations
 
 The implementation is now complete and ready for testing with the provided sample data and test cases.
+

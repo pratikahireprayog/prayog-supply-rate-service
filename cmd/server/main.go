@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
-	// "gorm.io/gorm" // Commented out since using mock repositories
+	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 
 	httpserver "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http"
-	// database "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/database" // Commented out since using mock repositories
+	database "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/database"
 	rateservice "github.com/prayog/prayog-supply-rate-service/internal/services/v1"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
@@ -21,8 +23,7 @@ import (
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
 	models "github.com/prayog/prayog-supply-rate-service/internal/shared/models/v1"
-
-	// repositoriesv1 "github.com/prayog/prayog-supply-rate-service/internal/shared/repositories/v1" // Commented out since using mock repositories
+	repositoriesv1 "github.com/prayog/prayog-supply-rate-service/internal/shared/repositories/v1"
 	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
@@ -37,14 +38,25 @@ const (
 )
 
 func main() {
+	// Load .env file (silently ignore if not found)
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Note: .env file not found or could not be loaded (this is fine if using environment variables)")
+	} else {
+		log.Printf("Loaded configuration from .env file")
+	}
+
 	// Print startup banner
 	printBanner()
 
-	// Load configuration (for now, use defaults)
+	// Load configuration
 	config := loadConfiguration()
 
-	// Initialize dependencies (Phase 1: Mock implementations)
-	dependencies := initializeDependencies()
+	// Load database configuration
+	dbConfig := loadDatabaseConfig()
+
+	// Initialize dependencies (with real database)
+	dependencies, cleanup := initializeDependencies(dbConfig)
+	defer cleanup()
 
 	// Create and configure HTTP server
 	server := httpserver.NewServer(
@@ -116,8 +128,7 @@ func loadConfiguration() *httpserver.ServerConfig {
 	return config
 }
 
-// loadDatabaseConfig() commented out since we're using mock repositories
-/*
+// loadDatabaseConfig loads database configuration from environment variables
 func loadDatabaseConfig() *database.PostgresConfig {
 	config := database.DefaultPostgresConfig()
 
@@ -126,7 +137,9 @@ func loadDatabaseConfig() *database.PostgresConfig {
 		config.Host = dbHost
 	}
 	if dbPort := os.Getenv("DB_PORT"); dbPort != "" {
-		fmt.Sscanf(dbPort, "%d", &config.Port)
+		if port, err := strconv.Atoi(dbPort); err == nil {
+			config.Port = port
+		}
 	}
 	if dbUser := os.Getenv("DB_USER"); dbUser != "" {
 		config.Username = dbUser
@@ -148,7 +161,6 @@ func loadDatabaseConfig() *database.PostgresConfig {
 		config.Host, config.Port, config.Database)
 	return config
 }
-*/
 
 // Dependencies holds all service dependencies
 type Dependencies struct {
@@ -158,15 +170,97 @@ type Dependencies struct {
 	Metrics         interfaces.MetricsCollector
 }
 
-func initializeDependencies() *Dependencies {
-	log.Println("Initializing dependencies with real DHL implementation and mock repositories")
+func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, func()) {
+	log.Println("Initializing dependencies with real database and implementations")
 
 	// Initialize real dependencies
 	logger := NewMockLogger()                            // Using mock logger for now, can be replaced with real logger later
 	metrics := NewMockMetrics()                          // Using mock metrics for now, can be replaced with real metrics later
 	httpClient := utils.NewHTTPClient(30*time.Second, 2) // 30s timeout, 2 retries
 
-	// Initialize mock repositories (since we don't have database setup yet)
+	// Initialize database
+	db := database.NewPostgresDB(dbConfig, logger)
+	if err := db.Connect(); err != nil {
+		// Fall back to mock repositories if database connection fails
+		log.Printf("WARNING: Failed to connect to database: %v", err)
+		log.Println("WARNING: Falling back to mock repositories for development")
+		return initializeMockDependencies(logger, metrics, httpClient)
+	}
+
+	// Run database migrations
+	if err := db.Migrate(); err != nil {
+		log.Printf("WARNING: Database migration failed: %v", err)
+		db.Close()
+		return initializeMockDependencies(logger, metrics, httpClient)
+	}
+
+	// Get GORM DB instance
+	gormDB := db.GetDB().(*gorm.DB)
+
+	// Initialize repositories with real database
+	partnerRepo := repositoriesv1.NewPartnerRepository(gormDB)
+	rateCardRepo := repositoriesv1.NewUnifiedRateCardRepository(gormDB)
+	cacheManager := NewMockCacheManager() // Still using mock cache for now
+
+	cleanup := func() {
+		log.Println("Cleaning up database connection...")
+		db.Close()
+	}
+
+	// Create rate factory
+	rateFactory := factory.NewRateFactory(partnerRepo, logger, metrics)
+
+	// Register DHL real-time implementation
+	dhlCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		return dhl.NewService(logger, metrics, httpClient), nil
+	}
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, dhlCreator); err != nil {
+		log.Fatalf("Failed to register DHL implementation: %v", err)
+	}
+
+	// Register Unified Rate pre-defined implementation
+	unifiedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
+	}
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypePreDefined, unifiedCreator); err != nil {
+		log.Fatalf("Failed to register Unified Rate implementation: %v", err)
+	}
+
+	// Create real rate service
+	rateService := rateservice.NewRateService(
+		rateFactory,
+		partnerRepo,
+		cacheManager,
+		logger,
+		metrics,
+		httpClient,
+	)
+
+	// Create unified rate card service
+	unifiedConfig := unified_rate.NewDefaultConfig()
+	rateCardService := unified_rate.NewRateCardService(
+		rateCardRepo,
+		httpClient,
+		logger,
+		metrics,
+		unifiedConfig,
+	)
+
+	logger.Info("All dependencies initialized successfully with real database")
+
+	return &Dependencies{
+		RateService:     rateService,
+		RateCardService: rateCardService,
+		Logger:          logger,
+		Metrics:         metrics,
+	}, cleanup
+}
+
+// initializeMockDependencies creates dependencies with mock repositories (fallback)
+func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClient interfaces.HTTPClient) (*Dependencies, func()) {
+	log.Println("Initializing with mock repositories (fallback mode)")
+
+	// Initialize mock repositories
 	partnerRepo := NewMockPartnerRepository()
 	rateCardRepo := NewMockUnifiedRateCardRepository()
 	cacheManager := NewMockCacheManager()
@@ -210,14 +304,16 @@ func initializeDependencies() *Dependencies {
 		unifiedConfig,
 	)
 
-	logger.Info("All dependencies initialized successfully")
+	logger.Info("Mock dependencies initialized successfully")
 
 	return &Dependencies{
-		RateService:     rateService,
-		RateCardService: rateCardService,
-		Logger:          logger,
-		Metrics:         metrics,
-	}
+			RateService:     rateService,
+			RateCardService: rateCardService,
+			Logger:          logger,
+			Metrics:         metrics,
+		}, func() {
+			log.Println("No cleanup needed for mock dependencies")
+		}
 }
 
 // Mock implementations for Phase 1

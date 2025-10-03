@@ -272,3 +272,4 @@ func (s *RateCardService) SetDefaultRateCard(ctx context.Context, id string, par
 func (s *RateCardService) GetPartnerConfiguration(ctx context.Context, partnerCode string) (tenantID, apiKey, unifiedRateCardID string, err error) {
 	return s.rateCardRepo.GetConfigByPartnerCode(ctx, partnerCode)
 }
+

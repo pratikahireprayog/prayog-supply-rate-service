@@ -176,3 +176,4 @@ func isDuplicateKeyError(err error) bool {
 	return err.Error() == "ERROR: duplicate key value violates unique constraint \"partners_code_key\" (SQLSTATE 23505)" ||
 		err.Error() == "ERROR: duplicate key value violates unique constraint \"partners_name_key\" (SQLSTATE 23505)"
 }
+

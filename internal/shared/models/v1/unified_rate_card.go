@@ -71,6 +71,10 @@ type UnifiedRateCardRequest struct {
 	TenantID      string                 `json:"tenant_id" validate:"required"`
 	APIKey        string                 `json:"api_key" validate:"required"`
 	Config        map[string]interface{} `json:"config,omitempty"`
+
+	// Audit fields (populated by server, not from request body)
+	CreatedBy string `json:"-"` // Populated from auth context
+	UpdatedBy string `json:"-"` // Populated from auth context
 }
 
 // UnifiedRateCardResponse represents response for rate card operations
