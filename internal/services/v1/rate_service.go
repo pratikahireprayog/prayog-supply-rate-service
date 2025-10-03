@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -1090,8 +1091,8 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "dhl":
 		s.logger.Info("Creating DHL service", "partner_code", normalizedCode)
 		return dhl.NewService(s.logger, s.metrics, s.httpClient), nil
-	// case "fedex":
-	//	return nil, fmt.Errorf("FedEx implementation not yet available")
+	case "fedex":
+		return nil, fmt.Errorf("FedEx implementation not yet available")
 	case "ups":
 		return nil, fmt.Errorf("UPS implementation not yet available")
 	case "blue_dart":
@@ -1115,7 +1116,8 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "dunzo":
 		return nil, fmt.Errorf("Dunzo implementation not yet available")
 	case "aramex":
-		return nil, fmt.Errorf("Aramex implementation not yet available")
+		s.logger.Info("Creating Rate service", "partner_code", normalizedCode)
+		return aramex.NewService(s.logger, s.metrics, s.httpClient), nil
 	default:
 		return nil, fmt.Errorf("unknown partner code: %s", normalizedCode)
 	}
