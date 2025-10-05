@@ -13,6 +13,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -1092,7 +1093,8 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 		s.logger.Info("Creating DHL service", "partner_code", normalizedCode)
 		return dhl.NewService(s.logger, s.metrics, s.httpClient), nil
 	case "fedex":
-		return nil, fmt.Errorf("FedEx implementation not yet available")
+        s.logger.Info("Creating FedEx service", "partner_code", normalizedCode)
+        return fedex.NewService(s.logger, s.metrics, s.httpClient), nil
 	case "ups":
 		return nil, fmt.Errorf("UPS implementation not yet available")
 	case "blue_dart":
