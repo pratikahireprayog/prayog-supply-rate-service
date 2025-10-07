@@ -20,11 +20,11 @@ type Config struct {
 // NewDefaultConfig creates default FedEx configuration with environment variables
 func NewDefaultConfig() *Config {
     return &Config{
-        BaseURL:       getEnv("FEDEX_BASE_URL", "https://apis-sandbox.fedex.com"),
+        BaseURL:       getEnv("FEDEX_BASE_URL", ""),
         ClientID:      getEnv("FEDEX_CLIENT_ID", ""),
         ClientSecret:  getEnv("FEDEX_CLIENT_SECRET", ""),
         AccountNumber: getEnv("FEDEX_ACCOUNT_NUMBER", ""),
-        Environment:   getEnv("FEDEX_ENVIRONMENT", "sandbox"),
+        Environment:   getEnv("FEDEX_ENVIRONMENT", ""),
         TimeoutMs:     getEnvAsInt("FEDEX_TIMEOUT_MS", 30000),
         RetryCount:    getEnvAsInt("FEDEX_RETRY_COUNT", 2),
     }

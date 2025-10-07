@@ -46,31 +46,3 @@ func (s *Service) validateRequest(request *dtos.RateCalculationRequest) error {
     return nil
 }
 
-// Helper functions for unit conversion
-func convertWeightToKg(weight float64, unit string) float64 {
-    switch strings.ToUpper(unit) {
-    case "G":
-        return weight / 1000
-    case "LB", "LBS":
-        return weight * 0.453592
-    case "OZ":
-        return weight * 0.0283495
-    default: // KG
-        return weight
-    }
-}
-
-func convertDimensionToCm(dimension float64, unit string) float64 {
-    switch strings.ToUpper(unit) {
-    case "M":
-        return dimension * 100
-    case "MM":
-        return dimension / 10
-    case "IN", "INCH":
-        return dimension * 2.54
-    case "FT":
-        return dimension * 30.48
-    default: // CM
-        return dimension
-    }
-}

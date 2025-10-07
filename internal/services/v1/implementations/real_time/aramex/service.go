@@ -10,6 +10,7 @@ import (
 
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
 // Service implements real-time rate fetching for Aramex
@@ -144,12 +145,12 @@ func (s *Service) convertToAramexRequest(req *dtos.RateCalculationRequest) (*Ara
     pkg := req.Packages[0]
     
     // Convert weight to kg
-    weightKg := convertWeightToKg(pkg.Weight, pkg.WeightUnit)
+    weightKg := utils.ConvertWeightToKg(pkg.Weight, pkg.WeightUnit)
     
     // Convert dimensions to cm
-    lengthCm := convertDimensionToCm(pkg.Length, pkg.DimUnit)
-    widthCm := convertDimensionToCm(pkg.Width, pkg.DimUnit)
-    heightCm := convertDimensionToCm(pkg.Height, pkg.DimUnit)
+    lengthCm := utils.ConvertDimensionToCm(pkg.Length, pkg.DimUnit)
+    widthCm := utils.ConvertDimensionToCm(pkg.Width, pkg.DimUnit)
+    heightCm := utils.ConvertDimensionToCm(pkg.Height, pkg.DimUnit)
 
     // Determine product group and type based on service type
     productGroup, productType := s.mapServiceToProductType(req.ServiceType)

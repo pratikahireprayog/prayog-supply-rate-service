@@ -21,14 +21,14 @@ type Config struct {
 // SECURITY: Credentials should be loaded from environment variables
 func NewDefaultConfig() *Config {
     return &Config{
-        BaseURL:           getEnv("ARAMEX_BASE_URL", "https://ws.aramex.net/ShippingAPI.V2/RateCalculator/Service_1_0.svc/json"),
-        Username:          getEnv("ARAMEX_USERNAME", "test.api@aramex.com"),
-        Password:          getEnv("ARAMEX_PASSWORD", "Aramex@12345"),
-        Version:           getEnv("ARAMEX_VERSION", "v1.0"),
-        AccountNumber:     getEnv("ARAMEX_ACCOUNT_NUMBER", "60531487"),
-        AccountPin:        getEnv("ARAMEX_ACCOUNT_PIN", "654654"),
-        AccountEntity:     getEnv("ARAMEX_ACCOUNT_ENTITY", "BOM"),
-        AccountCountryCode:getEnv("ARAMEX_ACCOUNT_COUNTRY_CODE", "IN"),
+        BaseURL:           getEnv("ARAMEX_BASE_URL", ""),
+        Username:          getEnv("ARAMEX_USERNAME", ""),
+        Password:          getEnv("ARAMEX_PASSWORD", ""),
+        Version:           getEnv("ARAMEX_VERSION", ""),
+        AccountNumber:     getEnv("ARAMEX_ACCOUNT_NUMBER", ""),
+        AccountPin:        getEnv("ARAMEX_ACCOUNT_PIN", ""),
+        AccountEntity:     getEnv("ARAMEX_ACCOUNT_ENTITY", ""),
+        AccountCountryCode:getEnv("ARAMEX_ACCOUNT_COUNTRY_CODE", ""),
         Source:            24,
     }
 }

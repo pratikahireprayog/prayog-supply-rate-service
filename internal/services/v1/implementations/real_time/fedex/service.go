@@ -12,6 +12,7 @@ import (
 
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
 // Service implements real-time rate fetching for FedEx
@@ -162,12 +163,12 @@ func (s *Service) convertToFedexRequest(req *dtos.RateCalculationRequest) (*Fede
     pkg := req.Packages[0]
     
     // Convert weight to kg
-    weightKg := convertWeightToKg(pkg.Weight, pkg.WeightUnit)
-    
+    weightKg :=  utils.ConvertWeightToKg(pkg.Weight, pkg.WeightUnit)    
+
     // Convert dimensions to cm and round to integers
-    lengthCm := int(convertDimensionToCm(pkg.Length, pkg.DimUnit))
-    widthCm := int(convertDimensionToCm(pkg.Width, pkg.DimUnit))
-    heightCm := int(convertDimensionToCm(pkg.Height, pkg.DimUnit))
+    lengthCm := int(utils.ConvertDimensionToCm(pkg.Length, pkg.DimUnit))
+    widthCm := int(utils.ConvertDimensionToCm(pkg.Width, pkg.DimUnit))
+    heightCm := int(utils.ConvertDimensionToCm(pkg.Height, pkg.DimUnit))
 
     fedexRequest := &FedexRateRequest{
         AccountNumber: struct {

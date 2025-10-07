@@ -78,3 +78,32 @@ func IsPreDefinedPartner(normalizedCode string) bool {
 
 	return preDefinedPartners[normalizedCode]
 }
+
+// Helper functions for unit conversion
+func ConvertWeightToKg(weight float64, unit string) float64 {
+    switch strings.ToUpper(unit) {
+    case "G":
+        return weight / 1000
+    case "LB", "LBS":
+        return weight * 0.453592
+    case "OZ":
+        return weight * 0.0283495
+    default: // KG
+        return weight
+    }
+}
+
+func ConvertDimensionToCm(dimension float64, unit string) float64 {
+    switch strings.ToUpper(unit) {
+    case "M":
+        return dimension * 100
+    case "MM":
+        return dimension / 10
+    case "IN", "INCH":
+        return dimension * 2.54
+    case "FT":
+        return dimension * 30.48
+    default: 
+        return dimension
+    }
+}

@@ -854,38 +854,49 @@ func (s *RateService) getHealthStatusString(isHealthy bool) string {
 }
 
 // GetQuotes retrieves quotes from multiple partners with standardized response structure
+// GetQuotes retrieves quotes from multiple partners with standardized response structure (parallel execution)
 func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest, requestID string) (*dtos.QuoteResponse, error) {
 	startTime := time.Now()
 
 	var successfulResponses []dtos.SuccessfulPartnerResponse
 	var failedResponses []dtos.FailedPartnerResponse
 
-	// Process each partner
+	// Channels for parallel results
+	successChan := make(chan dtos.SuccessfulPartnerResponse, len(request.Partners))
+	failChan := make(chan dtos.FailedPartnerResponse, len(request.Partners))
+
+	// Semaphore for concurrency control
+	sem := make(chan struct{}, s.maxConcurrency)
+	var wg sync.WaitGroup
+
 	for _, partner := range request.Partners {
-		partnerStartTime := time.Now()
+		wg.Add(1)
+		go func(p dtos.Partner) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		// Normalize partner code
-		normalizedCode := utils.NormalizePartnerCode(partner.Code)
-		partnerName := s.getPartnerName(normalizedCode)
+			partnerStartTime := time.Now()
+			normalizedCode := utils.NormalizePartnerCode(p.Code)
+			partnerName := s.getPartnerName(normalizedCode)
+			partnerInfo := dtos.PartnerInfo{
+				Code: normalizedCode,
+				Name: partnerName,
+			}
 
-		partnerInfo := dtos.PartnerInfo{
-			Code: normalizedCode,
-			Name: partnerName,
-		}
+			partnerIdentifier := p.ID
+			if partnerIdentifier == "" {
+				partnerIdentifier = normalizedCode
+			}
 
-		// Use partner.ID if provided, otherwise use normalized code
-		partnerIdentifier := partner.ID
-		if partnerIdentifier == "" {
-			partnerIdentifier = normalizedCode
-		}
-
-		// Get implementation for this partner
-		implementation, err := s.factory.GetImplementationInstance(partnerIdentifier)
-		if err != nil {
-			// Try to create implementation based on partner code
-			implementation, err = s.createImplementationByCode(normalizedCode)
+			// Get implementation
+			implementation, err := s.factory.GetImplementationInstance(partnerIdentifier)
 			if err != nil {
-				failedResponses = append(failedResponses, dtos.FailedPartnerResponse{
+				implementation, err = s.createImplementationByCode(normalizedCode)
+			}
+
+			if err != nil {
+				failChan <- dtos.FailedPartnerResponse{
 					Partner: partnerInfo,
 					Source:  "unknown",
 					Error: dtos.RateError{
@@ -893,44 +904,53 @@ func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest,
 						Message: "Partner implementation not found",
 						Details: fmt.Sprintf("No implementation found for partner code: %s", normalizedCode),
 					},
-				})
-				continue
+				}
+				return
 			}
-		}
 
-		// Determine source type
-		source := "real_time"
-		if implementation.GetImplementationType() == dtos.ProviderTypePreDefined {
-			source = "pre_defined"
-		}
+			source := "real_time"
+			if implementation.GetImplementationType() == dtos.ProviderTypePreDefined {
+				source = "pre_defined"
+			}
 
-		// Convert request to internal format
-		internalRequest := s.convertQuoteRequestToRateRequest(request)
+			internalRequest := s.convertQuoteRequestToRateRequest(request)
 
-		// Get rates from implementation
-		rateResponse, err := implementation.GetRates(ctx, internalRequest)
-		responseTimeMs := time.Since(partnerStartTime).Milliseconds()
+			rateResponse, err := implementation.GetRates(ctx, internalRequest)
+			responseTimeMs := time.Since(partnerStartTime).Milliseconds()
 
-		if err != nil {
-			failedResponses = append(failedResponses, dtos.FailedPartnerResponse{
-				Partner: partnerInfo,
-				Source:  source,
-				Error: dtos.RateError{
-					Code:    "RATE_FETCH_FAILED",
-					Message: "Failed to fetch rates from partner",
-					Details: err.Error(),
-				},
-			})
-		} else {
-			// Convert response to simplified format
-			availableRates := s.convertRateResponseToRates(rateResponse)
-			successfulResponses = append(successfulResponses, dtos.SuccessfulPartnerResponse{
-				Partner:        partnerInfo,
-				Source:         source,
-				AvailableRates: availableRates,
-				ResponseTimeMs: &responseTimeMs,
-			})
-		}
+			if err != nil {
+				failChan <- dtos.FailedPartnerResponse{
+					Partner: partnerInfo,
+					Source:  source,
+					Error: dtos.RateError{
+						Code:    "RATE_FETCH_FAILED",
+						Message: "Failed to fetch rates from partner",
+						Details: err.Error(),
+					},
+				}
+			} else {
+				availableRates := s.convertRateResponseToRates(rateResponse)
+				successChan <- dtos.SuccessfulPartnerResponse{
+					Partner:        partnerInfo,
+					Source:         source,
+					AvailableRates: availableRates,
+					ResponseTimeMs: &responseTimeMs,
+				}
+			}
+		}(partner)
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(successChan)
+	close(failChan)
+
+	// Collect results
+	for success := range successChan {
+		successfulResponses = append(successfulResponses, success)
+	}
+	for fail := range failChan {
+		failedResponses = append(failedResponses, fail)
 	}
 
 	// Calculate metadata
@@ -961,6 +981,7 @@ func (s *RateService) GetQuotes(ctx context.Context, request *dtos.QuoteRequest,
 
 	return response, nil
 }
+
 
 // Helper method to convert quote request to internal rate request
 func (s *RateService) convertQuoteRequestToRateRequest(req *dtos.QuoteRequest) *dtos.RateCalculationRequest {

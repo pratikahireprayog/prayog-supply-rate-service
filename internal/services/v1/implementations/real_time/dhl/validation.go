@@ -79,32 +79,5 @@ func (s *Service) validateRequest(req *dtos.RateCalculationRequest) error {
 	return nil
 }
 
-// convertWeightToKg converts weight to kilograms based on unit
-func convertWeightToKg(weight float64, unit string) float64 {
-	switch strings.ToLower(unit) {
-	case "kg":
-		return weight
-	case "g":
-		return weight / 1000
-	case "lb":
-		return weight * 0.453592
-	default:
-		return weight // Assume kg if unknown
-	}
-}
-
-// convertDimensionToCm converts dimension to centimeters based on unit
-func convertDimensionToCm(dimension float64, unit string) float64 {
-	switch strings.ToLower(unit) {
-	case "cm":
-		return dimension
-	case "mm":
-		return dimension / 10
-	case "in":
-		return dimension * 2.54
-	default:
-		return dimension // Assume cm if unknown
-	}
-}
 
 
