@@ -12,6 +12,7 @@ import (
 
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
+	utils "github.com/prayog/prayog-supply-rate-service/internal/shared/utils/v1"
 )
 
 // Service implements real-time rate fetching for DHL Express
@@ -140,12 +141,12 @@ func (s *Service) convertToDHLRequest(req *dtos.RateCalculationRequest) (map[str
 	dhlPackages := make([]map[string]interface{}, 0, len(req.Packages))
 	for _, pkg := range req.Packages {
 		// Convert weight to kg
-		weightKg := convertWeightToKg(pkg.Weight, pkg.WeightUnit)
+   		weightKg :=  utils.ConvertWeightToKg(pkg.Weight, pkg.WeightUnit)    
 
 		// Convert dimensions to cm
-		lengthCm := convertDimensionToCm(pkg.Length, pkg.DimUnit)
-		widthCm := convertDimensionToCm(pkg.Width, pkg.DimUnit)
-		heightCm := convertDimensionToCm(pkg.Height, pkg.DimUnit)
+		lengthCm := utils.ConvertDimensionToCm(pkg.Length, pkg.DimUnit)
+		widthCm := utils.ConvertDimensionToCm(pkg.Width, pkg.DimUnit)
+		heightCm := utils.ConvertDimensionToCm(pkg.Height, pkg.DimUnit)
 
 		dhlPackage := map[string]interface{}{
 			"weight": weightKg,

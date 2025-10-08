@@ -1,34 +1,76 @@
 package fedex
 
-// Config holds FedEx-specific configuration
+import (
+	"os"
+	"strconv"
+	"strings"
+)
+
+// Config holds FedEx service configuration
 type Config struct {
-	BaseURL     string `json:"base_url"`
-	APIKey      string `json:"api_key"`
-	SecretKey   string `json:"secret_key"`
-	AccountID   string `json:"account_id"`
-	TimeoutMs   int    `json:"timeout_ms"`
-	RetryCount  int    `json:"retry_count"`
-	Environment string `json:"environment"` // "test" or "production"
+    BaseURL       string
+    ClientID      string
+    ClientSecret  string
+    AccountNumber string
+    Environment   string
+    TimeoutMs     int
+    RetryCount    int
 }
 
-// NewDefaultConfig creates a new default configuration for FedEx
+// NewDefaultConfig creates default FedEx configuration with environment variables
 func NewDefaultConfig() *Config {
-	return &Config{
-		BaseURL:     "https://apis-sandbox.fedex.com", // Sandbox URL
-		TimeoutMs:   30000,                            // 30 seconds
-		RetryCount:  2,
-		Environment: "test",
-	}
+    return &Config{
+        BaseURL:       getEnv("FEDEX_BASE_URL", ""),
+        ClientID:      getEnv("FEDEX_CLIENT_ID", ""),
+        ClientSecret:  getEnv("FEDEX_CLIENT_SECRET", ""),
+        AccountNumber: getEnv("FEDEX_ACCOUNT_NUMBER", ""),
+        Environment:   getEnv("FEDEX_ENVIRONMENT", ""),
+        TimeoutMs:     getEnvAsInt("FEDEX_TIMEOUT_MS", 30000),
+        RetryCount:    getEnvAsInt("FEDEX_RETRY_COUNT", 2),
+    }
 }
 
-// LoadFromMap loads configuration from a map
+// LoadFromMap loads configuration from map (overrides env vars)
 func (c *Config) LoadFromMap(config map[string]interface{}) error {
-	// Implementation placeholder
-	return nil
+    if baseURL, ok := config["base_url"].(string); ok && baseURL != "" {
+        c.BaseURL = baseURL
+    }
+    if clientID, ok := config["client_id"].(string); ok && clientID != "" {
+        c.ClientID = clientID
+    }
+    if clientSecret, ok := config["client_secret"].(string); ok && clientSecret != "" {
+        c.ClientSecret = clientSecret
+    }
+    if accountNumber, ok := config["account_number"].(string); ok && accountNumber != "" {
+        c.AccountNumber = accountNumber
+    }
+    if environment, ok := config["environment"].(string); ok && environment != "" {
+        c.Environment = environment
+    }
+    if timeoutMs, ok := config["timeout_ms"].(int); ok && timeoutMs > 0 {
+        c.TimeoutMs = timeoutMs
+    }
+    if retryCount, ok := config["retry_count"].(int); ok && retryCount > 0 {
+        c.RetryCount = retryCount
+    }
+    
+    return nil
 }
 
-// Validate validates the configuration
-func (c *Config) Validate() error {
-	// Implementation placeholder
-	return nil
+// Helper function to get environment variable with default
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return strings.TrimSpace(value)
+    }
+    return defaultValue
+}
+
+// Helper function to get environment variable as int with default
+func getEnvAsInt(key string, defaultValue int) int {
+    if value := os.Getenv(key); value != "" {
+        if intValue, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+            return intValue
+        }
+    }
+    return defaultValue
 }
