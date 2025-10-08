@@ -188,11 +188,12 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 	}
 
 	// Run database migrations
-	if err := db.Migrate(); err != nil {
-		log.Printf("WARNING: Database migration failed: %v", err)
-		db.Close()
-		return initializeMockDependencies(logger, metrics, httpClient)
-	}
+	// NOTE: Database migration is commented out. Run migrations manually if needed.
+	// if err := db.Migrate(); err != nil {
+	// 	log.Printf("WARNING: Database migration failed: %v", err)
+	// 	db.Close()
+	// 	return initializeMockDependencies(logger, metrics, httpClient)
+	// }
 
 	// Get GORM DB instance
 	gormDB := db.GetDB().(*gorm.DB)
