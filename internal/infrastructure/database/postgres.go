@@ -69,7 +69,18 @@ func (p *PostgresDB) Connect() error {
 	p.logger.Info("Connecting to PostgreSQL database",
 		"host", p.config.Host,
 		"port", p.config.Port,
-		"database", p.config.Database)
+		"database", p.config.Database,
+		"ssl_mode", p.config.SSLMode,
+		"timezone", p.config.TimeZone)
+
+	// Log SSL enforcement details
+	if p.config.SSLMode == "require" || p.config.SSLMode == "verify-ca" || p.config.SSLMode == "verify-full" {
+		p.logger.Info("SSL is enforced for database connection",
+			"ssl_mode", p.config.SSLMode)
+	} else if p.config.SSLMode == "disable" {
+		p.logger.Warn("SSL is disabled for database connection - not recommended for production",
+			"ssl_mode", p.config.SSLMode)
+	}
 
 	// Configure GORM logger
 	var gormLogLevel logger.LogLevel
@@ -119,6 +130,13 @@ func (p *PostgresDB) Connect() error {
 	sqlDB.SetConnMaxIdleTime(p.config.ConnMaxIdleTime)
 
 	p.db = db
+
+	// Log connection pool configuration
+	p.logger.Info("Database connection pool configured",
+		"max_open_conns", p.config.MaxOpenConns,
+		"max_idle_conns", p.config.MaxIdleConns,
+		"conn_max_lifetime", p.config.ConnMaxLifetime.String(),
+		"conn_max_idle_time", p.config.ConnMaxIdleTime.String())
 
 	p.logger.Info("Successfully connected to PostgreSQL database")
 	return nil
@@ -188,6 +206,63 @@ func (p *PostgresDB) Health() error {
 	}
 
 	return nil
+}
+
+// HealthCheck performs a comprehensive database health check
+func (p *PostgresDB) HealthCheck(ctx context.Context) error {
+	// Check basic connectivity
+	if p.db == nil {
+		return fmt.Errorf("database not connected")
+	}
+
+	sqlDB, err := p.db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	// Ping database
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
+	}
+
+	// Check if we can execute a simple query
+	var result int
+	if err := p.db.WithContext(ctx).Raw("SELECT 1").Scan(&result).Error; err != nil {
+		return fmt.Errorf("database query test failed: %w", err)
+	}
+
+	if result != 1 {
+		return fmt.Errorf("database query returned unexpected result: %d", result)
+	}
+
+	p.logger.Debug("Database health check passed")
+	return nil
+}
+
+// GetConnectionStats returns current database connection statistics
+func (p *PostgresDB) GetConnectionStats(ctx context.Context) (map[string]interface{}, error) {
+	if p.db == nil {
+		return nil, fmt.Errorf("database not connected")
+	}
+
+	sqlDB, err := p.db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	stats := sqlDB.Stats()
+
+	return map[string]interface{}{
+		"max_open_connections":   stats.MaxOpenConnections,
+		"open_connections":       stats.OpenConnections,
+		"in_use":                 stats.InUse,
+		"idle":                   stats.Idle,
+		"wait_count":             stats.WaitCount,
+		"wait_duration":          stats.WaitDuration.String(),
+		"max_idle_closed":        stats.MaxIdleClosed,
+		"max_idle_time_closed":   stats.MaxIdleTimeClosed,
+		"max_lifetime_closed":    stats.MaxLifetimeClosed,
+	}, nil
 }
 
 // Transaction executes function within a database transaction
