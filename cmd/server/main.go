@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
+	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -211,12 +213,19 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 	// Create rate factory
 	rateFactory := factory.NewRateFactory(partnerRepo, logger, metrics)
 
-	// Register DHL real-time implementation
-	dhlCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-		return dhl.NewService(logger, metrics, httpClient), nil
+	// Register unified real-time implementation creator that dispatches based on partner code
+	realTimeCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		switch strings.ToLower(partner.Code) {
+		case "dhl", "dhl_express":
+			return dhl.NewService(logger, metrics, httpClient), nil
+		case "india_post", "india_post_international":
+			return indiapost.NewService(logger, metrics, httpClient), nil
+		default:
+			return nil, fmt.Errorf("unsupported real-time partner: %s", partner.Code)
+		}
 	}
-	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, dhlCreator); err != nil {
-		log.Fatalf("Failed to register DHL implementation: %v", err)
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, realTimeCreator); err != nil {
+		log.Fatalf("Failed to register real-time implementation: %v", err)
 	}
 
 	// Register Unified Rate pre-defined implementation
@@ -269,12 +278,19 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 	// Create rate factory
 	rateFactory := factory.NewRateFactory(partnerRepo, logger, metrics)
 
-	// Register DHL real-time implementation
-	dhlCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-		return dhl.NewService(logger, metrics, httpClient), nil
+	// Register unified real-time implementation creator that dispatches based on partner code
+	realTimeCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		switch strings.ToLower(partner.Code) {
+		case "dhl", "dhl_express":
+			return dhl.NewService(logger, metrics, httpClient), nil
+		case "india_post", "india_post_international":
+			return indiapost.NewService(logger, metrics, httpClient), nil
+		default:
+			return nil, fmt.Errorf("unsupported real-time partner: %s", partner.Code)
+		}
 	}
-	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, dhlCreator); err != nil {
-		log.Fatalf("Failed to register DHL implementation: %v", err)
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, realTimeCreator); err != nil {
+		log.Fatalf("Failed to register real-time implementation: %v", err)
 	}
 
 	// Register Unified Rate pre-defined implementation
@@ -539,8 +555,52 @@ func (r *MockPartnerRepository) GetByID(ctx context.Context, id string) (*models
 }
 
 func (r *MockPartnerRepository) GetByCode(ctx context.Context, code string) (*models.Partner, error) {
-	// Return the same mock DHL partner for any code
-	return r.GetByID(ctx, code)
+	// Return appropriate partner based on code
+	switch strings.ToLower(code) {
+	case "dhl", "dhl_express":
+		return &models.Partner{
+			ID:   uuid.New(),
+			Code: "dhl",
+			Name: "DHL Express",
+			Type: dtos.ProviderTypeRealTime,
+			Config: map[string]interface{}{
+				"base_url":       "https://express.api.dhl.com/mydhlapi/test/rates",
+				"credentials":    "c2hyZWVtYXJ1dDhJTjpJITBwTV40c1IjNG5KJDF1",
+				"account_number": "533748932",
+				"timeout_ms":     30000,
+				"environment":    "test",
+			},
+			IsActive:  true,
+			Priority:  1,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	case "india_post", "india_post_international":
+		return &models.Partner{
+			ID:   uuid.New(),
+			Code: "india_post_international",
+			Name: "India Post International",
+			Type: dtos.ProviderTypeRealTime,
+			Config: map[string]interface{}{
+				"base_url":        "https://test.cept.gov.in/beextcustomer/v1",
+				"login_endpoint":  "/access/login",
+				"tariff_endpoint": "/international-tariff/calculate",
+				"username":        "9999999999",
+				"password":        "Dop@1234",
+				"timeout_ms":      30000,
+				"environment":     "test",
+				"token_expiry_sec": 900,
+			},
+			IsActive:  true,
+			Priority:  2,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	default:
+		return nil, fmt.Errorf("partner not found: %s", code)
+	}
 }
 
 func (r *MockPartnerRepository) GetAll(ctx context.Context, filters map[string]interface{}) ([]*models.Partner, error) {
@@ -552,7 +612,7 @@ func (r *MockPartnerRepository) GetPartnersByType(ctx context.Context, partnerTy
 }
 
 func (r *MockPartnerRepository) GetActivePartners(ctx context.Context) ([]*models.Partner, error) {
-	// Return mock active partners including DHL
+	// Return mock active partners including DHL and India Post
 	return []*models.Partner{
 		{
 			ID:   uuid.New(),
@@ -568,6 +628,27 @@ func (r *MockPartnerRepository) GetActivePartners(ctx context.Context) ([]*model
 			},
 			IsActive:  true,
 			Priority:  1,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		{
+			ID:   uuid.New(),
+			Code: "india_post_international",
+			Name: "India Post International",
+			Type: dtos.ProviderTypeRealTime,
+			Config: map[string]interface{}{
+				"base_url":        "https://test.cept.gov.in/beextcustomer/v1",
+				"login_endpoint":  "/access/login",
+				"tariff_endpoint": "/international-tariff/calculate",
+				"username":        "9999999999",
+				"password":        "Dop@1234",
+				"timeout_ms":      30000,
+				"environment":     "test",
+				"token_expiry_sec": 900,
+			},
+			IsActive:  true,
+			Priority:  2,
 			TimeoutMs: 30000,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),

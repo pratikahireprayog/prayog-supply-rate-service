@@ -14,6 +14,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
+	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -1087,16 +1088,18 @@ func (s *RateService) calculateQuoteSummary(partnerRates []dtos.PartnerRateResul
 // getPartnerName returns the display name for a partner code
 func (s *RateService) getPartnerName(partnerCode string) string {
 	partnerNames := map[string]string{
-		"dhl":       "DHL Express",
-		"fedex":     "FedEx",
-		"ups":       "UPS",
-		"blue_dart": "Blue Dart",
-		"delhivery": "Delhivery",
-		"porter":    "Porter",
-		"unified":   "Unified Rate",
-		"prayog":    "Prayog Unified Rate",
-		"dunzo":     "Dunzo",
-		"aramex":    "Aramex",
+		"dhl":                       "DHL Express",
+		"fedex":                     "FedEx",
+		"ups":                       "UPS",
+		"blue_dart":                 "Blue Dart",
+		"delhivery":                 "Delhivery",
+		"porter":                    "Porter",
+		"unified":                   "Unified Rate",
+		"prayog":                    "Prayog Unified Rate",
+		"dunzo":                     "Dunzo",
+		"aramex":                    "Aramex",
+		"india_post_international":  "India Post International",
+		"india_post":                "India Post International",
 	}
 
 	if name, exists := partnerNames[partnerCode]; exists {
@@ -1113,6 +1116,17 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "dhl":
 		s.logger.Info("Creating DHL service", "partner_code", normalizedCode)
 		return dhl.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "india_post_international", "india_post":
+		s.logger.Info("Creating India Post International service", "partner_code", normalizedCode)
+		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get India Post partner: %w", err)
+		}
+		implementation := indiapost.NewService(s.logger, s.metrics, s.httpClient)
+		if err := implementation.Initialize(partner.Config); err != nil {
+			return nil, fmt.Errorf("failed to initialize India Post service: %w", err)
+		}
+		return implementation, nil
 	case "fedex":
         s.logger.Info("Creating FedEx service", "partner_code", normalizedCode)
         return fedex.NewService(s.logger, s.metrics, s.httpClient), nil
