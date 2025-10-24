@@ -19,22 +19,15 @@ type Config struct {
 
 func NewDefaultConfig() *Config {
     return &Config{
-        BaseURL:         getEnv("INDIA_POST_DOMESTIC_BASE_URL", "https://test.cept.gov.in/beextcustomer/v1"),
-        AccessTokenURL:  getEnv("INDIA_POST_DOMESTIC_ACCESS_TOKEN_URL", "https://test.cept.gov.in/beextcustomer/v1/access/login"),
-        RefreshTokenURL: getEnv("INDIA_POST_DOMESTIC_REFRESH_TOKEN_URL", "https://test.cept.gov.in/beextcustomer/v1/access/TokenWithRtoken"),
-        Username:        getEnv("INDIA_POST_DOMESTIC_USERNAME", ""),
-        Password:        getEnv("INDIA_POST_DOMESTIC_PASSWORD", ""),
+        BaseURL:         os.Getenv("INDIA_POST_DOMESTIC_BASE_URL"),
+        AccessTokenURL:  os.Getenv("INDIA_POST_DOMESTIC_ACCESS_TOKEN_URL"),
+        RefreshTokenURL: os.Getenv("INDIA_POST_DOMESTIC_REFRESH_TOKEN_URL"),
+        Username:        os.Getenv("INDIA_POST_DOMESTIC_USERNAME"),
+        Password:        os.Getenv("INDIA_POST_DOMESTIC_PASSWORD"),
         TimeoutMs:       30000,
         RetryCount:      2,
         Enabled:         true,
     }
-}
-
-func getEnv(key, def string) string {
-    if v := os.Getenv(key); v != "" {
-        return v
-    }
-    return def
 }
 
 func (c *Config) LoadFromMap(m map[string]interface{}) error {
