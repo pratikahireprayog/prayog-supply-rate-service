@@ -577,21 +577,13 @@ func (r *MockPartnerRepository) GetByCode(ctx context.Context, code string) (*mo
 			UpdatedAt: time.Now(),
 		}, nil
 	case "india_post", "india_post_international":
+		// Mock partner - configuration will be loaded from environment variables via config.go
 		return &models.Partner{
-			ID:   uuid.New(),
-			Code: "india_post_international",
-			Name: "India Post International",
-			Type: dtos.ProviderTypeRealTime,
-			Config: map[string]interface{}{
-				"base_url":        "https://test.cept.gov.in/beextcustomer/v1",
-				"login_endpoint":  "/access/login",
-				"tariff_endpoint": "/international-tariff/calculate",
-				"username":        "9999999999",
-				"password":        "Dop@1234",
-				"timeout_ms":      30000,
-				"environment":     "test",
-				"token_expiry_sec": 900,
-			},
+			ID:       uuid.New(),
+			Code:     "india_post_international",
+			Name:     "India Post International",
+			Type:     dtos.ProviderTypeRealTime,
+			Config:   map[string]interface{}{}, // Empty - service will use NewDefaultConfig() which reads from env
 			IsActive:  true,
 			Priority:  2,
 			TimeoutMs: 30000,
@@ -633,20 +625,11 @@ func (r *MockPartnerRepository) GetActivePartners(ctx context.Context) ([]*model
 			UpdatedAt: time.Now(),
 		},
 		{
-			ID:   uuid.New(),
-			Code: "india_post_international",
-			Name: "India Post International",
-			Type: dtos.ProviderTypeRealTime,
-			Config: map[string]interface{}{
-				"base_url":        "https://test.cept.gov.in/beextcustomer/v1",
-				"login_endpoint":  "/access/login",
-				"tariff_endpoint": "/international-tariff/calculate",
-				"username":        "9999999999",
-				"password":        "Dop@1234",
-				"timeout_ms":      30000,
-				"environment":     "test",
-				"token_expiry_sec": 900,
-			},
+			ID:       uuid.New(),
+			Code:     "india_post_international",
+			Name:     "India Post International",
+			Type:     dtos.ProviderTypeRealTime,
+			Config:   map[string]interface{}{}, // Empty - service will use NewDefaultConfig() which reads from env
 			IsActive:  true,
 			Priority:  2,
 			TimeoutMs: 30000,
