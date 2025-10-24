@@ -35,6 +35,8 @@ func GetPartnerDisplayName(normalizedCode string) string {
 		return "DHL Express"
 	case "fedex":
 		return "FedEx"
+    case "india_post_domestic":
+        return "India Post Domestic"
 	case "ups":
 		return "UPS"
 	case "blue_dart":
@@ -62,6 +64,7 @@ func IsRealTimePartner(normalizedCode string) bool {
 		"fedex":  true,
 		"ups":    true,
 		"aramex": true,
+        "india_post_domestic": true,
 	}
 
 	return realTimePartners[normalizedCode]
