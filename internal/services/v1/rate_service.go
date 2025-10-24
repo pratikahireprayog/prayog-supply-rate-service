@@ -14,6 +14,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
+    india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -1040,6 +1041,7 @@ func (s *RateService) convertQuoteRequestToRateRequest(req *dtos.QuoteRequest) *
 		Priority:      "normal",
 		Source:        "api",
 		Packages:      packages, // Add actual packages with dimensions
+		Metadata:      req.Metadata, // Pass through metadata for COD, insurance, etc.
 	}
 }
 
@@ -1141,6 +1143,9 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "aramex":
 		s.logger.Info("Creating Rate service", "partner_code", normalizedCode)
 		return aramex.NewService(s.logger, s.metrics, s.httpClient), nil
+    case "india_post_domestic":
+        s.logger.Info("Creating India Post Domestic service", "partner_code", normalizedCode)
+        return india_post_domestic.NewService(s.logger, s.metrics, s.httpClient), nil
 	default:
 		return nil, fmt.Errorf("unknown partner code: %s", normalizedCode)
 	}
