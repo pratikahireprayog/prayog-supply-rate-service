@@ -19,15 +19,22 @@ type Config struct {
 
 func NewDefaultConfig() *Config {
     return &Config{
-        BaseURL:         os.Getenv("INDIA_POST_DOMESTIC_BASE_URL"),
-        AccessTokenURL:  os.Getenv("INDIA_POST_DOMESTIC_ACCESS_TOKEN_URL"),
-        RefreshTokenURL: os.Getenv("INDIA_POST_DOMESTIC_REFRESH_TOKEN_URL"),
-        Username:        os.Getenv("INDIA_POST_DOMESTIC_USERNAME"),
-        Password:        os.Getenv("INDIA_POST_DOMESTIC_PASSWORD"),
+        BaseURL:         getEnv("INDIA_POST_DOMESTIC_BASE_URL", ""),
+        AccessTokenURL:  getEnv("INDIA_POST_DOMESTIC_ACCESS_TOKEN_URL", ""),
+        RefreshTokenURL: getEnv("INDIA_POST_DOMESTIC_REFRESH_TOKEN_URL", ""),
+        Username:        getEnv("INDIA_POST_DOMESTIC_USERNAME", ""),
+        Password:        getEnv("INDIA_POST_DOMESTIC_PASSWORD", ""),
         TimeoutMs:       30000,
         RetryCount:      2,
         Enabled:         true,
     }
+}
+
+func getEnv(key, def string) string {
+    if v := os.Getenv(key); v != "" {
+        return v
+    }
+    return def
 }
 
 func (c *Config) LoadFromMap(m map[string]interface{}) error {
