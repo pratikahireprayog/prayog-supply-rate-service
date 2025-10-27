@@ -20,7 +20,11 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
+<<<<<<< HEAD
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
+=======
+    india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
+>>>>>>> feb0517df698ab08707f8dbbb821638e929dd595
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -228,6 +232,14 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 		log.Fatalf("Failed to register real-time implementation: %v", err)
 	}
 
+    // Register India Post Domestic real-time implementation
+    indiaPostCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+        return india_post_domestic.NewService(logger, metrics, httpClient), nil
+    }
+    if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, indiaPostCreator); err != nil {
+        log.Fatalf("Failed to register India Post Domestic implementation: %v", err)
+    }
+
 	// Register Unified Rate pre-defined implementation
 	unifiedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
 		return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
@@ -292,6 +304,14 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, realTimeCreator); err != nil {
 		log.Fatalf("Failed to register real-time implementation: %v", err)
 	}
+
+    // Register India Post Domestic real-time implementation
+    indiaPostCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+        return india_post_domestic.NewService(logger, metrics, httpClient), nil
+    }
+    if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, indiaPostCreator); err != nil {
+        log.Fatalf("Failed to register India Post Domestic implementation: %v", err)
+    }
 
 	// Register Unified Rate pre-defined implementation
 	unifiedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
