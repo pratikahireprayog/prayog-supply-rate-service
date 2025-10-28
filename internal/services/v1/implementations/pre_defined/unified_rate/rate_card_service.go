@@ -82,7 +82,8 @@ func (s *RateCardService) CreateRateCard(ctx context.Context, req *models.Unifie
 	}
 
 	if !unifiedResponse.Success {
-		return nil, fmt.Errorf("unified API call failed: %s", unifiedResponse.Message)
+		s.logger.Error("unified API call failed: %s", unifiedResponse.Message)
+		// return nil, fmt.Errorf("unified API call failed: %s", unifiedResponse.Message)
 	}
 
 	// Create local record with the unified rate card ID

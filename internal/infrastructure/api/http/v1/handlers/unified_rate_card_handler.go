@@ -39,9 +39,13 @@ func NewUnifiedRateCardHandler(
 func (h *UnifiedRateCardHandler) CreateRateCard(c *fiber.Ctx) error {
 	requestID := c.Get(constants.HeaderRequestID)
 
-	// Parse request body for rate card request
-	var req models.UnifiedRateCardRequest
-	if err := c.BodyParser(&req); err != nil {
+	// Parse into a combined struct or map first
+	var combinedRequest struct {
+		models.UnifiedRateCardRequest
+		RateCardData unified_rate.RateCardRequest `json:"rate_card_data"`
+	}
+
+	if err := c.BodyParser(&combinedRequest); err != nil {
 		h.logger.Warn("Invalid request body",
 			"error", err,
 			"request_id", requestID,
@@ -54,6 +58,9 @@ func (h *UnifiedRateCardHandler) CreateRateCard(c *fiber.Ctx) error {
 		))
 	}
 
+	// Now you have both structs populated
+	req := combinedRequest.UnifiedRateCardRequest
+	rateCardData := combinedRequest.RateCardData
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
 		h.logger.Warn("Request validation failed",
@@ -61,20 +68,6 @@ func (h *UnifiedRateCardHandler) CreateRateCard(c *fiber.Ctx) error {
 			"request_id", requestID)
 
 		return c.Status(fiber.StatusBadRequest).JSON(utils.ValidationErrorResponse(err))
-	}
-
-	// Parse rate card data from request body
-	var rateCardData unified_rate.RateCardRequest
-	if err := c.BodyParser(&rateCardData); err != nil {
-		h.logger.Warn("Invalid rate card data",
-			"error", err,
-			"request_id", requestID)
-
-		return c.Status(fiber.StatusBadRequest).JSON(utils.ErrorResponse(
-			"Invalid rate card data",
-			constants.CodeInvalidRequest,
-			err.Error(),
-		))
 	}
 
 	// Extract user information from auth context for audit logging
