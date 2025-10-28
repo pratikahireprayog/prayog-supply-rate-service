@@ -103,10 +103,11 @@ type Rate struct {
 
 // Price represents pricing information
 type Price struct {
-	Currency string                 `json:"currency"`
-	Amount   float64                `json:"amount"`
-	Type     string                 `json:"type,omitempty"`
-	Criteria map[string]interface{} `json:"criteria,omitempty"`
+	Currency    string                 `json:"currency"`
+	Amount      float64                `json:"amount"`
+	Type        string                 `json:"type,omitempty"`
+	Criteria    map[string]interface{} `json:"criteria,omitempty"`
+	ServiceType string                 `json:"ServiceType,omitempty"`
 }
 
 // RateError represents an error from a partner

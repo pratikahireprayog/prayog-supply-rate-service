@@ -1046,15 +1046,17 @@ func (s *RateService) convertQuoteRequestToRateRequest(req *dtos.QuoteRequest) *
 // Helper method to convert internal rate response to simplified rates
 func (s *RateService) convertRateResponseToRates(resp *dtos.RateCalculationResponse) []dtos.Rate {
 	rates := make([]dtos.Rate, 0, len(resp.Quotes))
-
+	serviceType:= ""
 	for _, quote := range resp.Quotes {
+		serviceType = quote.ServiceType
 		rate := dtos.Rate{
 			RateID:  quote.QuoteID,
 			Service: quote.PartnerName,
 			Price: dtos.Price{
-				Currency: quote.Currency,
-				Amount:   quote.TotalPrice,
-				Type:     "standard",
+				Currency:    quote.Currency,
+				Amount:      quote.TotalPrice,
+				Type:        "standard",
+				ServiceType: serviceType,
 			},
 		}
 

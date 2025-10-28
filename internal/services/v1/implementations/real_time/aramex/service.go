@@ -98,39 +98,64 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
     }
 
     startTime := time.Now()
-    s.logger.Info("Fetching rates from Aramex API",
-        "request_id", request.RequestID,
-        "origin", request.OriginCity,
-        "origin_country", request.OriginCountry,
-        "destination", request.DestCity,
-        "dest_country", request.DestCountry,
-        "weight", request.Weight,
-        "packages", len(request.Packages))
+ 
+    // List of all Aramex product types to query
+    productTypes := []string{"PDX", "PPX", "PLX", "DDX", "DPX", "GDX", "GPX", "EPX"}
 
-    // Convert our request to Aramex format
-    aramexRequest, err := s.convertToAramexRequest(request)
-    if err != nil {
-        return nil, fmt.Errorf("failed to convert request: %w", err)
+    response := &dtos.RateCalculationResponse{
+        RequestID:    request.RequestID,
+        Status:       "success",
+        Message:      "Aggregated rates retrieved from Aramex",
+        Quotes:       []dtos.RateQuote{},
+        Timestamp:    time.Now(),
+        CacheHit:     false,
     }
 
-    // Make API call
-    aramexResponse, err := s.callAramexAPI(ctx, aramexRequest)
-    if err != nil {
-        s.metrics.IncrementCounter("aramex_api_error", map[string]string{
-            "error_type": "api_call_failed",
-        })
-        return nil, fmt.Errorf("Aramex API call failed: %w", err)
+    var successfulCount int
+
+    for _, productType := range productTypes {
+        select {
+        case <-ctx.Done():
+            s.logger.Warn("Context cancelled during rate fetching", "product_type", productType)
+            return nil, ctx.Err()
+        default:
+        }
+
+        s.logger.Info("Fetching Aramex rate", "product_type", productType)
+
+        aramexRequest, err := s.convertToAramexRequestWithProduct(request, productType)
+        if err != nil {
+            s.logger.Error("Failed to convert request", "product_type", productType, "error", err)
+            continue
+        }
+        s.logger.Info("aramexRequest", &aramexRequest);
+        aramexResponse, err := s.callAramexAPI(ctx, aramexRequest)
+        if err != nil {
+            s.logger.Warn("Aramex API call failed", "product_type", productType, "error", err)
+            continue
+        }
+
+        quote := s.createRateQuoteFromResponse(aramexResponse, request, productType, time.Since(startTime))
+        response.Quotes = append(response.Quotes, quote)
+        successfulCount++
     }
 
-    // Convert Aramex response to our format
-    response := s.convertFromAramexResponse(aramexResponse, request, time.Since(startTime))
+    response.TotalQuotes = len(response.Quotes)
+    if response.TotalQuotes > 0 {
+        response.BestQuote = &response.Quotes[0]
+    }
 
     s.metrics.IncrementCounter("aramex_api_success", map[string]string{
         "total_quotes": fmt.Sprintf("%d", len(response.Quotes)),
     })
-    s.metrics.RecordTimer("aramex_api_duration", time.Since(startTime), map[string]string{
-        "endpoint": "calculate_rate",
+    s.metrics.RecordTimer("aramex_api_total_duration", time.Since(startTime), map[string]string{
+        "total_successful": fmt.Sprintf("%d", successfulCount),
     })
+
+    if successfulCount == 0 {
+        response.Status = "failed"
+        response.Message = "No successful rate retrieved from Aramex"
+    }
 
     return response, nil
 }
@@ -435,4 +460,84 @@ func (s *Service) IsHealthy(ctx context.Context) error {
 
     s.logger.Info("Aramex API health check successful")
     return nil
+}
+
+func (s *Service) convertToAramexRequestWithProduct(req *dtos.RateCalculationRequest, productType string) (*AramexRateRequest, error) {
+    if len(req.Packages) == 0 {
+        return nil, fmt.Errorf("at least one package is required")
+    }
+
+    pkg := req.Packages[0]
+    weightKg := utils.ConvertWeightToKg(pkg.Weight, pkg.WeightUnit)
+    lengthCm := utils.ConvertDimensionToCm(pkg.Length, pkg.DimUnit)
+    widthCm := utils.ConvertDimensionToCm(pkg.Width, pkg.DimUnit)
+    heightCm := utils.ConvertDimensionToCm(pkg.Height, pkg.DimUnit)
+
+    // Infer product group based on product type prefix
+    productGroup := "EXP"
+
+    return &AramexRateRequest{
+        ClientInfo: ClientInfo{
+            UserName:           s.config.Username,
+            Password:           s.config.Password,
+            Version:            s.config.Version,
+            AccountNumber:      s.config.AccountNumber,
+            AccountPin:         s.config.AccountPin,
+            AccountEntity:      s.config.AccountEntity,
+            AccountCountryCode: s.config.AccountCountryCode,
+            Source:             s.config.Source,
+        },
+        OriginAddress: Address{
+            Line1:       "N/A",
+            City:        req.OriginCity,
+            PostCode:    req.OriginCity,
+            CountryCode: req.OriginCountry,
+        },
+        DestinationAddress: Address{
+            Line1:       "N/A",
+            City:        req.DestCity,
+            PostCode:    req.DestCity,
+            CountryCode: req.DestCountry,
+        },
+        ShipmentDetails: ShipmentDetails{
+            Dimensions: Dimensions{
+                Length: lengthCm,
+                Width:  widthCm,
+                Height: heightCm,
+                Unit:   "cm",
+            },
+            ActualWeight: Weight{
+                Unit:  "KG",
+                Value: weightKg,
+            },
+            DescriptionOfGoods: "General Goods",
+            GoodsOriginCountry: req.OriginCountry,
+            NumberOfPieces:     1,
+            ProductGroup:       productGroup,
+            ProductType:        productType,
+            PaymentType:        "P",
+        },
+    }, nil
+}
+
+
+func (s *Service) createRateQuoteFromResponse(resp *AramexRateResponse, req *dtos.RateCalculationRequest, productType string, duration time.Duration) dtos.RateQuote {
+    return dtos.RateQuote{
+        QuoteID:         fmt.Sprintf("aramex_%s_%d", strings.ToLower(productType), time.Now().UnixNano()),
+        PartnerID:       "aramex",
+        PartnerName:     "Aramex",
+        ProviderType:    dtos.ProviderTypeRealTime,
+        BasePrice:       resp.RateDetails.Amount,
+        TotalPrice:      resp.TotalAmount.Value,
+        Currency:        resp.TotalAmount.CurrencyCode,
+        ServiceType:     productType,
+        ServiceLevel:    s.mapProductTypeToServiceLevel(productType),
+        EstimatedDays:   s.getEstimatedDays(productType, req.OriginCountry, req.DestCountry),
+        ValidUntil:      time.Now().Add(24 * time.Hour),
+        Confidence:      0.9,
+        IsRecommended:   productType == "PPX", // usually PPX is priority
+        Source:          "real_time",
+        ResponseTimeMs:  duration.Milliseconds(),
+        ExternalQuoteID: fmt.Sprintf("%s_%s", productType, resp.TotalAmount.CurrencyCode),
+    }
 }
