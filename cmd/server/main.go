@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,9 +18,10 @@ import (
 	database "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/database"
 	rateservice "github.com/prayog/prayog-supply-rate-service/internal/services/v1"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/baral_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
-    india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
+	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -163,6 +165,112 @@ func loadDatabaseConfig() *database.PostgresConfig {
 	return config
 }
 
+// initializeBaralFromEnv initializes Baral partner from environment variables
+func initializeBaralFromEnv(ctx context.Context, partnerRepo interfaces.PartnerRepository) error {
+	// Check if Baral is enabled
+	baralEnabled := os.Getenv("BARAL_ENABLED")
+	if strings.ToLower(baralEnabled) != "true" {
+		log.Println("Baral integration not enabled (BARAL_ENABLED != true)")
+		return nil
+	}
+
+	log.Println("Initializing Baral partner from environment variables...")
+
+	// Load Baral configuration from environment
+	partnerCode := getEnvOrDefault("BARAL_PARTNER_CODE", "sunil_baral")
+	baseURL := getEnvOrDefault("BARAL_BASE_URL", "https://apis2.delcaper.com/rate-card-api")
+	endpoint := getEnvOrDefault("BARAL_ENDPOINT", "/allratecards")
+	cacheTTL := getEnvAsIntOrDefault("BARAL_CACHE_TTL_MINUTES", 60)
+	timeoutMs := getEnvAsIntOrDefault("BARAL_TIMEOUT_MS", 30000)
+	retryCount := getEnvAsIntOrDefault("BARAL_RETRY_COUNT", 2)
+	priority := getEnvAsIntOrDefault("BARAL_PRIORITY", 5)
+	currency := getEnvOrDefault("BARAL_DEFAULT_CURRENCY", "INR")
+
+	// Build configuration JSON
+	config := map[string]interface{}{
+		"base_url":                baseURL,
+		"all_rate_cards_endpoint": endpoint,
+		"partner_code":            partnerCode,
+		"cache_ttl_minutes":       cacheTTL,
+		"enable_cache":            true,
+		"default_currency":        currency,
+		"timeout_ms":              timeoutMs,
+		"retry_count":             retryCount,
+	}
+
+	// Check if partner already exists (check both "baral" and the configured partner code)
+	existingPartner, err := partnerRepo.GetByCode(ctx, partnerCode)
+	if err != nil {
+		// Try with "baral" as fallback
+		existingPartner, err = partnerRepo.GetByCode(ctx, "baral")
+	}
+	
+	if err == nil && existingPartner != nil {
+		// Partner exists, update it
+		log.Printf("Updating existing Baral partner configuration from environment")
+		existingPartner.Config = config
+		existingPartner.TimeoutMs = timeoutMs
+		existingPartner.RetryCount = retryCount
+		existingPartner.Priority = priority
+		existingPartner.IsActive = true
+
+		if err := partnerRepo.Update(ctx, existingPartner); err != nil {
+			return fmt.Errorf("failed to update Baral partner: %w", err)
+		}
+
+		log.Printf("✅ Baral partner updated successfully from environment variables")
+		return nil
+	}
+
+	// Partner doesn't exist, create it
+	log.Printf("Creating new Baral partner from environment variables")
+	
+	partner := &models.Partner{
+		ID:          uuid.New(),
+		Name:        "Baral Rate Card",
+		Code:        partnerCode, // Use the partner code from environment (sunil_baral)
+		Type:        models.PartnerTypePreDefined,
+		IsActive:    true,
+		Priority:    priority,
+		Config:      config,
+		TimeoutMs:   timeoutMs,
+		RetryCount:  retryCount,
+		Description: "Baral Rate Card service configured from environment variables",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := partnerRepo.Create(ctx, partner); err != nil {
+		return fmt.Errorf("failed to create Baral partner: %w", err)
+	}
+
+	log.Printf("✅ Baral partner created successfully from environment variables")
+	log.Printf("   - Partner Code: %s", partnerCode)
+	log.Printf("   - Base URL: %s", baseURL)
+	log.Printf("   - Cache TTL: %d minutes", cacheTTL)
+	log.Printf("   - Timeout: %d ms", timeoutMs)
+
+	return nil
+}
+
+// getEnvOrDefault gets environment variable or returns default
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvAsIntOrDefault gets environment variable as int or returns default
+func getEnvAsIntOrDefault(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
+
 // Dependencies holds all service dependencies
 type Dependencies struct {
 	RateService     interfaces.RateService
@@ -204,6 +312,11 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 	rateCardRepo := repositoriesv1.NewUnifiedRateCardRepository(gormDB)
 	cacheManager := NewMockCacheManager() // Still using mock cache for now
 
+	// Auto-configure Baral from environment variables if enabled
+	if err := initializeBaralFromEnv(context.Background(), partnerRepo); err != nil {
+		log.Printf("WARNING: Failed to initialize Baral from environment: %v", err)
+	}
+
 	cleanup := func() {
 		log.Println("Cleaning up database connection...")
 		db.Close()
@@ -212,28 +325,34 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 	// Create rate factory
 	rateFactory := factory.NewRateFactory(partnerRepo, logger, metrics)
 
-	// Register DHL real-time implementation
-	dhlCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-		return dhl.NewService(logger, metrics, httpClient), nil
+	// Register unified real-time implementation creator that dispatches based on partner code
+	realTimeCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		switch strings.ToLower(partner.Code) {
+		case "dhl", "dhl_express":
+			return dhl.NewService(logger, metrics, httpClient), nil
+		case "india_post", "india_post_international":
+			return indiapost.NewService(logger, metrics, httpClient), nil
+		default:
+			return nil, fmt.Errorf("unsupported real-time partner: %s", partner.Code)
+		}
 	}
-	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, dhlCreator); err != nil {
-		log.Fatalf("Failed to register DHL implementation: %v", err)
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, realTimeCreator); err != nil {
+		log.Fatalf("Failed to register real-time implementation: %v", err)
 	}
 
-    // Register India Post Domestic real-time implementation
-    indiaPostCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-        return india_post_domestic.NewService(logger, metrics, httpClient), nil
-    }
-    if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, indiaPostCreator); err != nil {
-        log.Fatalf("Failed to register India Post Domestic implementation: %v", err)
-    }
-
-	// Register Unified Rate pre-defined implementation
-	unifiedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-		return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
+	// Register pre-defined implementation creator that dispatches based on partner code
+	preDefinedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		switch strings.ToLower(partner.Code) {
+		case "unified", "unified_rate":
+			return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
+		case "baral", "baral_rate", "sunil_baral":
+			return baral_rate.NewService(logger, metrics, httpClient), nil
+		default:
+			return nil, fmt.Errorf("unsupported pre-defined partner: %s", partner.Code)
+		}
 	}
-	if err := rateFactory.RegisterImplementation(dtos.ProviderTypePreDefined, unifiedCreator); err != nil {
-		log.Fatalf("Failed to register Unified Rate implementation: %v", err)
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypePreDefined, preDefinedCreator); err != nil {
+		log.Fatalf("Failed to register pre-defined implementation: %v", err)
 	}
 
 	// Create real rate service
@@ -278,28 +397,34 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 	// Create rate factory
 	rateFactory := factory.NewRateFactory(partnerRepo, logger, metrics)
 
-	// Register DHL real-time implementation
-	dhlCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-		return dhl.NewService(logger, metrics, httpClient), nil
+	// Register unified real-time implementation creator that dispatches based on partner code
+	realTimeCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		switch strings.ToLower(partner.Code) {
+		case "dhl", "dhl_express":
+			return dhl.NewService(logger, metrics, httpClient), nil
+		case "india_post", "india_post_international":
+			return indiapost.NewService(logger, metrics, httpClient), nil
+		default:
+			return nil, fmt.Errorf("unsupported real-time partner: %s", partner.Code)
+		}
 	}
-	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, dhlCreator); err != nil {
-		log.Fatalf("Failed to register DHL implementation: %v", err)
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, realTimeCreator); err != nil {
+		log.Fatalf("Failed to register real-time implementation: %v", err)
 	}
 
-    // Register India Post Domestic real-time implementation
-    indiaPostCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-        return india_post_domestic.NewService(logger, metrics, httpClient), nil
-    }
-    if err := rateFactory.RegisterImplementation(dtos.ProviderTypeRealTime, indiaPostCreator); err != nil {
-        log.Fatalf("Failed to register India Post Domestic implementation: %v", err)
-    }
-
-	// Register Unified Rate pre-defined implementation
-	unifiedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
-		return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
+	// Register pre-defined implementation creator that dispatches based on partner code
+	preDefinedCreator := func(partner *models.Partner) (interfaces.RateImplementation, error) {
+		switch strings.ToLower(partner.Code) {
+		case "unified", "unified_rate":
+			return unified_rate.NewService(logger, metrics, httpClient, rateCardRepo), nil
+		case "baral", "baral_rate", "sunil_baral":
+			return baral_rate.NewService(logger, metrics, httpClient), nil
+		default:
+			return nil, fmt.Errorf("unsupported pre-defined partner: %s", partner.Code)
+		}
 	}
-	if err := rateFactory.RegisterImplementation(dtos.ProviderTypePreDefined, unifiedCreator); err != nil {
-		log.Fatalf("Failed to register Unified Rate implementation: %v", err)
+	if err := rateFactory.RegisterImplementation(dtos.ProviderTypePreDefined, preDefinedCreator); err != nil {
+		log.Fatalf("Failed to register pre-defined implementation: %v", err)
 	}
 
 	// Create real rate service
@@ -556,8 +681,68 @@ func (r *MockPartnerRepository) GetByID(ctx context.Context, id string) (*models
 }
 
 func (r *MockPartnerRepository) GetByCode(ctx context.Context, code string) (*models.Partner, error) {
-	// Return the same mock DHL partner for any code
-	return r.GetByID(ctx, code)
+	// Return appropriate partner based on code
+	switch strings.ToLower(code) {
+	case "dhl", "dhl_express":
+		return &models.Partner{
+			ID:   uuid.New(),
+			Code: "dhl",
+			Name: "DHL Express",
+			Type: dtos.ProviderTypeRealTime,
+			Config: map[string]interface{}{
+				"base_url":       "https://express.api.dhl.com/mydhlapi/test/rates",
+				"credentials":    "c2hyZWVtYXJ1dDhJTjpJITBwTV40c1IjNG5KJDF1",
+				"account_number": "533748932",
+				"timeout_ms":     30000,
+				"environment":    "test",
+			},
+			IsActive:  true,
+			Priority:  1,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	case "india_post", "india_post_international":
+		// Mock partner - configuration will be loaded from environment variables via config.go
+		return &models.Partner{
+			ID:       uuid.New(),
+			Code:     "india_post_international",
+			Name:     "India Post International",
+			Type:     dtos.ProviderTypeRealTime,
+			Config:   map[string]interface{}{}, // Empty - service will use NewDefaultConfig() which reads from env
+			IsActive:  true,
+			Priority:  2,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	case "baral", "baral_rate", "sunil_baral":
+		// Mock Baral partner - configuration will be loaded from environment variables via config.go
+		return &models.Partner{
+			ID:   uuid.New(),
+			Code: "sunil_baral",
+			Name: "Baral Rate Card",
+			Type: dtos.ProviderTypePreDefined,
+			Config: map[string]interface{}{
+				"base_url":                "https://apis2.delcaper.com/rate-card-api",
+				"all_rate_cards_endpoint": "/allratecards",
+				"partner_code":            "sunil_baral",
+				"cache_ttl_minutes":       60,
+				"enable_cache":            true,
+				"default_currency":        "INR",
+				"timeout_ms":              30000,
+				"retry_count":             2,
+			},
+			IsActive:  true,
+			Priority:  5,
+			TimeoutMs: 30000,
+			RetryCount: 2,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	default:
+		return nil, fmt.Errorf("partner not found: %s", code)
+	}
 }
 
 func (r *MockPartnerRepository) GetAll(ctx context.Context, filters map[string]interface{}) ([]*models.Partner, error) {
@@ -569,7 +754,7 @@ func (r *MockPartnerRepository) GetPartnersByType(ctx context.Context, partnerTy
 }
 
 func (r *MockPartnerRepository) GetActivePartners(ctx context.Context) ([]*models.Partner, error) {
-	// Return mock active partners including DHL
+	// Return mock active partners including DHL, India Post, and Baral
 	return []*models.Partner{
 		{
 			ID:   uuid.New(),
@@ -588,6 +773,40 @@ func (r *MockPartnerRepository) GetActivePartners(ctx context.Context) ([]*model
 			TimeoutMs: 30000,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
+		},
+		{
+			ID:       uuid.New(),
+			Code:     "india_post_international",
+			Name:     "India Post International",
+			Type:     dtos.ProviderTypeRealTime,
+			Config:   map[string]interface{}{}, // Empty - service will use NewDefaultConfig() which reads from env
+			IsActive:  true,
+			Priority:  2,
+			TimeoutMs: 30000,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		{
+			ID:   uuid.New(),
+			Code: "sunil_baral",
+			Name: "Baral Rate Card",
+			Type: dtos.ProviderTypePreDefined,
+			Config: map[string]interface{}{
+				"base_url":                "https://apis2.delcaper.com/rate-card-api",
+				"all_rate_cards_endpoint": "/allratecards",
+				"partner_code":            "sunil_baral",
+				"cache_ttl_minutes":       60,
+				"enable_cache":            true,
+				"default_currency":        "INR",
+				"timeout_ms":              30000,
+				"retry_count":             2,
+			},
+			IsActive:   true,
+			Priority:   5,
+			TimeoutMs:  30000,
+			RetryCount: 2,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
 		},
 	}, nil
 }
