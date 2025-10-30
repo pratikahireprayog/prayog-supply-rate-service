@@ -16,7 +16,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
-    india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
+	india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -1177,6 +1177,15 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 			return nil, fmt.Errorf("failed to initialize Baral service: %w", err)
 		}
 		return implementation, nil
+	case "shipcube":
+		s.logger.Info("Creating Unified Rate service", "partner_code", normalizedCode)
+		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
+		implementation := unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo)
+		if err := implementation.Initialize(map[string]interface{}{}); err != nil {
+			return nil, fmt.Errorf("failed to initialize Unified Rate service: %w", err)
+		}
+		return implementation, nil
+	
 	default:
 		return nil, fmt.Errorf("unknown partner code: %s", normalizedCode)
 	}
