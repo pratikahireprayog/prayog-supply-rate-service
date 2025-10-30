@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -111,35 +112,9 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
         CacheHit:     false,
     }
 
-    var successfulCount int
-
-    for _, productType := range productTypes {
-        select {
-        case <-ctx.Done():
-            s.logger.Warn("Context cancelled during rate fetching", "product_type", productType)
-            return nil, ctx.Err()
-        default:
-        }
-
-        s.logger.Info("Fetching Aramex rate", "product_type", productType)
-
-        aramexRequest, err := s.convertToAramexRequestWithProduct(request, productType)
-        if err != nil {
-            s.logger.Error("Failed to convert request", "product_type", productType, "error", err)
-            continue
-        }
-        s.logger.Info("aramexRequest", &aramexRequest);
-        aramexResponse, err := s.callAramexAPI(ctx, aramexRequest)
-        if err != nil {
-            s.logger.Warn("Aramex API call failed", "product_type", productType, "error", err)
-            continue
-        }
-
-        quote := s.createRateQuoteFromResponse(aramexResponse, request, productType, time.Since(startTime))
-        response.Quotes = append(response.Quotes, quote)
-        successfulCount++
-    }
-
+    // Fetch rates in parallel using goroutines
+    quotes, successfulCount := s.fetchRatesParallel(ctx, request, productTypes, startTime)
+    response.Quotes = quotes
     response.TotalQuotes = len(response.Quotes)
     if response.TotalQuotes > 0 {
         response.BestQuote = &response.Quotes[0]
@@ -158,6 +133,80 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
     }
 
     return response, nil
+}
+
+// fetchRatesParallel fetches rates for multiple product types in parallel
+func (s *Service) fetchRatesParallel(ctx context.Context, request *dtos.RateCalculationRequest, productTypes []string, startTime time.Time) ([]dtos.RateQuote, int) {
+    // Create channels for results
+    quoteChan := make(chan dtos.RateQuote, len(productTypes))
+    
+    // Create semaphore for concurrency control (max 4 concurrent requests to avoid overwhelming the API)
+    sem := make(chan struct{}, 4)
+    
+    var wg sync.WaitGroup
+    
+    for _, productType := range productTypes {
+        wg.Add(1)
+        go func(pt string) {
+            defer wg.Done()
+            
+            // Acquire semaphore
+            sem <- struct{}{}
+            defer func() { <-sem }()
+            
+            // Check context cancellation
+            select {
+            case <-ctx.Done():
+                s.logger.Warn("Context cancelled during rate fetching", "product_type", pt)
+                return
+            default:
+            }
+            
+            s.logger.Info("Fetching Aramex rate", "product_type", pt)
+            
+            // Convert request
+            aramexRequest, err := s.convertToAramexRequestWithProduct(request, pt)
+            if err != nil {
+                s.logger.Error("Failed to convert request", "product_type", pt, "error", err)
+                return
+            }
+            
+            s.logger.Debug("Aramex request prepared", "product_type", pt)
+            
+            // Call Aramex API
+            aramexResponse, err := s.callAramexAPI(ctx, aramexRequest)
+            if err != nil {
+                s.logger.Warn("Aramex API call failed", "product_type", pt, "error", err)
+                return
+            }
+            
+            // Create quote and send to channel
+            quote := s.createRateQuoteFromResponse(aramexResponse, request, pt, time.Since(startTime))
+            quoteChan <- quote
+            
+            s.logger.Info("Successfully fetched Aramex rate", "product_type", pt, "price", quote.TotalPrice)
+        }(productType)
+    }
+    
+    // Wait for all goroutines to complete
+    go func() {
+        wg.Wait()
+        close(quoteChan)
+    }()
+    
+    // Collect results from channel
+    var quotes []dtos.RateQuote
+    for quote := range quoteChan {
+        quotes = append(quotes, quote)
+    }
+    
+    successfulCount := len(quotes)
+    s.logger.Info("Parallel rate fetching completed", 
+        "total_product_types", len(productTypes),
+        "successful_count", successfulCount,
+        "duration_ms", time.Since(startTime).Milliseconds())
+    
+    return quotes, successfulCount
 }
 
 // convertToAramexRequest converts our request format to Aramex API format
