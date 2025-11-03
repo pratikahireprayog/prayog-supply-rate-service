@@ -17,6 +17,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/naqel"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -1103,6 +1104,8 @@ func (s *RateService) getPartnerName(partnerCode string) string {
 		"prayog":                    "Prayog Unified Rate",
 		"dunzo":                     "Dunzo",
 		"aramex":                    "Aramex",
+		"naqel":                     "Naqel Express",
+		"naqel_express":             "Naqel Express",
 		"india_post_international":  "India Post International",
 		"india_post":                "India Post International",
 		"sunil_baral":               "Baral Rate Card",
@@ -1163,6 +1166,9 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "aramex":
 		s.logger.Info("Creating Rate service", "partner_code", normalizedCode)
 		return aramex.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "naqel", "naqel_express":
+		s.logger.Info("Creating Naqel Express service", "partner_code", normalizedCode)
+		return naqel.NewService(s.logger, s.metrics, s.httpClient), nil
     case "india_post_domestic":
         s.logger.Info("Creating India Post Domestic service", "partner_code", normalizedCode)
         return india_post_domestic.NewService(s.logger, s.metrics, s.httpClient), nil

@@ -16,7 +16,7 @@ type QuoteRequest struct {
 // Location represents a geographical location
 type Location struct {
 	PostalCode  string  `json:"postal_code" validate:"required"`
-	CountryCode string  `json:"country_code" validate:"required,len=2"`
+	CountryCode string  `json:"country_code" validate:"required"`
 	Latitude    float64 `json:"latitude,omitempty"`
 	Longitude   float64 `json:"longitude,omitempty"`
 }

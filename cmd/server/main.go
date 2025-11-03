@@ -22,6 +22,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/naqel"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -332,6 +333,8 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 			return dhl.NewService(logger, metrics, httpClient), nil
 		case "india_post", "india_post_international":
 			return indiapost.NewService(logger, metrics, httpClient), nil
+		case "naqel", "naqel_express":
+			return naqel.NewService(logger, metrics, httpClient), nil
 		default:
 			return nil, fmt.Errorf("unsupported real-time partner: %s", partner.Code)
 		}
@@ -404,6 +407,8 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 			return dhl.NewService(logger, metrics, httpClient), nil
 		case "india_post", "india_post_international":
 			return indiapost.NewService(logger, metrics, httpClient), nil
+		case "naqel", "naqel_express":
+			return naqel.NewService(logger, metrics, httpClient), nil
 		default:
 			return nil, fmt.Errorf("unsupported real-time partner: %s", partner.Code)
 		}
