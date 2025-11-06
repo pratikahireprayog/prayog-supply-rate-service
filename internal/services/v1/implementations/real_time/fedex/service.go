@@ -509,6 +509,7 @@ func (s *Service) convertFromFedexResponse(
             Source:          "real_time",
             ResponseTimeMs:  responseTime.Milliseconds(),
             ExternalQuoteID: rateDetail.ServiceType,
+            Description: fmt.Sprintf("%s – %s", rateDetail.ServiceName, s.mapFedexServiceDescription(rateDetail.ServiceType)),
         }
 
         s.logger.Debug("FedEx rate quote",
@@ -708,4 +709,21 @@ func (s *Service) IsHealthy(ctx context.Context) error {
 
     s.logger.Info("FedEx API health check successful")
     return nil
+}
+
+func (s *Service) mapFedexServiceDescription(serviceType string) string {
+	switch strings.ToUpper(serviceType) {
+	case "FIRST_OVERNIGHT":
+		return "Earliest next-day delivery by 8 AM."
+	case "PRIORITY_OVERNIGHT":
+		return "Next-day delivery by 10:30 AM to most addresses."
+	case "FEDEX_2_DAY":
+		return "Delivery within 2 business days."
+	case "FEDEX_EXPRESS_SAVER":
+		return "Delivery within 3 business days."
+	case "FEDEX_GROUND":
+		return "Day-definite delivery within 1–5 business days."
+	default:
+		return "FedEx shipping service."
+	}
 }

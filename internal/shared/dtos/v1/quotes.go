@@ -99,6 +99,7 @@ type Rate struct {
 	Service      string `json:"service"`
 	Price        Price  `json:"price"`
 	DeliveryDays *int   `json:"delivery_days,omitempty"`
+	Description  string `json:"description"`
 }
 
 // Price represents pricing information

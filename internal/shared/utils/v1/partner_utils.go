@@ -96,6 +96,19 @@ func ConvertWeightToKg(weight float64, unit string) float64 {
     }
 }
 
+func ConvertWeightToGrams(weight float64, unit string) float64 {
+	switch strings.ToUpper(unit) {
+	case "KG":
+		return weight * 1000
+	case "LB", "LBS":
+		return weight * 453.592
+	case "OZ":
+		return weight * 28.3495
+	default: // G
+		return weight
+	}
+}
+
 func ConvertDimensionToCm(dimension float64, unit string) float64 {
     switch strings.ToUpper(unit) {
     case "M":

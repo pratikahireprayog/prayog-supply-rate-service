@@ -96,8 +96,8 @@ type RateQuote struct {
 	// Service information
 	ServiceType    string `json:"service_type"`
 	ServiceLevel   string `json:"service_level"`
-	EstimatedDays  int    `json:"estimated_days"`
-	EstimatedHours int    `json:"estimated_hours"`
+	EstimatedDays  int    `json:"estimated_days,omitempty"`
+	EstimatedHours int    `json:"estimated_hours,omitempty"`
 
 	// Validity and confidence
 	ValidUntil      time.Time `json:"valid_until"`
@@ -117,6 +117,7 @@ type RateQuote struct {
 	Terms           string                 `json:"terms,omitempty"`
 	Notes           string                 `json:"notes,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Description		string                 `json:"description,omitempty"`
 }
 
 // PriceBreakdown provides detailed price information
