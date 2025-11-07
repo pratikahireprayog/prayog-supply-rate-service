@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/baral_rate"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/shipcube"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
@@ -1056,7 +1057,8 @@ func (s *RateService) convertRateResponseToRates(resp *dtos.RateCalculationRespo
 		serviceType = quote.ServiceType
 		rate := dtos.Rate{
 			RateID:  quote.QuoteID,
-			Service: quote.PartnerName,
+			Service: serviceType,
+			Description: quote.Description,
 			Price: dtos.Price{
 				Currency:    quote.Currency,
 				Amount:      quote.TotalPrice,
@@ -1184,14 +1186,8 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 		}
 		return implementation, nil
 	case "shipcube":
-		s.logger.Info("Creating Unified Rate service", "partner_code", normalizedCode)
-		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
-		implementation := unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo)
-		if err := implementation.Initialize(map[string]interface{}{}); err != nil {
-			return nil, fmt.Errorf("failed to initialize Unified Rate service: %w", err)
-		}
-		return implementation, nil
-	
+		s.logger.Info("Creating Rate service Shipcube", "partner_code", normalizedCode)
+		return shipcube.NewService(s.logger, s.metrics, s.httpClient), nil
 	default:
 		return nil, fmt.Errorf("unknown partner code: %s", normalizedCode)
 	}

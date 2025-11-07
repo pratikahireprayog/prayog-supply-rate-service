@@ -341,54 +341,6 @@ func (s *Service) callAramexAPI(ctx context.Context, request *AramexRateRequest)
     return &response, nil
 }
 
-// convertFromAramexResponse converts Aramex response to our format
-func (s *Service) convertFromAramexResponse(
-    aramexResp *AramexRateResponse,
-    originalReq *dtos.RateCalculationRequest,
-    responseTime time.Duration,
-) *dtos.RateCalculationResponse {
-
-    response := &dtos.RateCalculationResponse{
-        RequestID:    originalReq.RequestID,
-        Status:       "success",
-        Message:      "Rates retrieved from Aramex",
-        Quotes:       []dtos.RateQuote{},
-        ResponseTime: responseTime.Milliseconds(),
-        CacheHit:     false,
-        Timestamp:    time.Now(),
-    }
-
-    // Create rate quote from Aramex response
-    quote := dtos.RateQuote{
-        QuoteID:         fmt.Sprintf("aramex_%s_%d", strings.ToLower(originalReq.ServiceType), 0),
-        PartnerID:       "aramex",
-        PartnerName:     "Aramex",
-        ProviderType:    dtos.ProviderTypeRealTime,
-        BasePrice:       aramexResp.RateDetails.Amount,
-        TotalPrice:      aramexResp.TotalAmount.Value,
-        Currency:        aramexResp.TotalAmount.CurrencyCode,
-        ServiceType:     originalReq.ServiceType,
-        ServiceLevel:    s.mapProductTypeToServiceLevel(originalReq.ServiceType),
-        EstimatedDays:   s.getEstimatedDays(originalReq.ServiceType, originalReq.OriginCountry, originalReq.DestCountry),
-        ValidUntil:      time.Now().Add(24 * time.Hour), 
-        Confidence:      0.90,
-        IsRecommended:   true,
-        Source:          "real_time",
-        ResponseTimeMs:  responseTime.Milliseconds(),
-        ExternalQuoteID: fmt.Sprintf("%s_%s", originalReq.ServiceType, aramexResp.TotalAmount.CurrencyCode),
-        // TaxAmount:       aramexResp.RateDetails.TaxAmount,
-    }
-
-    response.Quotes = append(response.Quotes, quote)
-    response.TotalQuotes = len(response.Quotes)
-    
-    if response.TotalQuotes > 0 {
-        response.BestQuote = &response.Quotes[0]
-    }
-
-    return response
-}
-
 // mapProductTypeToServiceLevel maps product type to service level name
 func (s *Service) mapProductTypeToServiceLevel(serviceType string) string {
     switch strings.ToLower(serviceType) {
@@ -588,5 +540,31 @@ func (s *Service) createRateQuoteFromResponse(resp *AramexRateResponse, req *dto
         Source:          "real_time",
         ResponseTimeMs:  duration.Milliseconds(),
         ExternalQuoteID: fmt.Sprintf("%s_%s", productType, resp.TotalAmount.CurrencyCode),
+        Description:     s.fetchDescriptionFromProductType(productType),
     }
+}
+
+// fetchDescriptionFromProductType returns a human-readable description
+// for a given Aramex product type code.
+func (s *Service) fetchDescriptionFromProductType(productType string) string {
+	switch strings.ToUpper(productType) {
+	case "PDX":
+		return "Priority Document Express – Urgent, time-sensitive consignments containing printed matter or document material."
+	case "PPX":
+		return "Priority Parcel Express – Urgent, time-sensitive consignments containing non-printed matter or non-document material."
+	case "PLX":
+		return "Priority Letter Express – Urgent, time-sensitive consignments containing printed matter of weight less than 0.5 kg."
+	case "DDX":
+		return "Deferred Document Express – 2nd Day Delivery consignments containing printed matter or document material."
+	case "DPX":
+		return "Deferred Parcel Express – 2nd Day Delivery consignments containing non-printed matter or non-document material."
+	case "GDX":
+		return "Ground Document Express – Ground delivery consignments containing printed matter or document material."
+	case "GPX":
+		return "Ground Parcel Express – Ground delivery consignments containing non-printed matter or non-document material."
+	case "EPX":
+		return "Economy Parcel Express – Non-document shipments for commercial use, including online sales, delivered locally or globally."
+	default:
+		return "Unknown product type – description not available."
+	}
 }
