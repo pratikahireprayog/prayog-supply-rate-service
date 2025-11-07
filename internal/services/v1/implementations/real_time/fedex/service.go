@@ -462,7 +462,7 @@ func (s *Service) convertFromFedexResponse(
         shipmentDetail := rateDetail.RatedShipmentDetails[0]
 
         // Map FedEx service type to our service type
-        serviceType := s.mapServiceTypeToOurType(rateDetail.ServiceType)
+        // serviceType := s.mapServiceTypeToOurType(rateDetail.ServiceType)
 
         // Calculate estimated days (simplified)
         estimatedDays := s.getEstimatedDays(rateDetail.ServiceType, originalReq.OriginCountry, originalReq.DestCountry)
@@ -500,7 +500,7 @@ func (s *Service) convertFromFedexResponse(
             BasePrice:       basePrice,
             TotalPrice:      totalPrice,
             Currency:        currency,
-            ServiceType:     serviceType,
+            ServiceType:     rateDetail.ServiceType,
             ServiceLevel:    rateDetail.ServiceName,
             EstimatedDays:   estimatedDays,
             ValidUntil:      time.Now().Add(24 * time.Hour), // 24 hour validity
