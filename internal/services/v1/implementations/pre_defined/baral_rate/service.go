@@ -260,10 +260,10 @@ func (s *Service) matchRatesToRequest(request *dtos.RateCalculationRequest, rate
 			"total_rate_cards", len(rates))
 	}
 
-	// Filter for PAN INDIA rate card (for across India coverage)
-	// Priority: 1) PAN INDIA rate card, 2) Primary rate card, 3) All others
-	var panIndiaRate *BaralRate
-	var primaryRate *BaralRate
+	// Sort rates to put PAN INDIA first, then all others
+	// This ensures PAN INDIA appears at the top of the list
+	var panIndiaRates []*BaralRate
+	var otherRates []*BaralRate
 
 	for i := range rates {
 		rate := &rates[i]
@@ -271,36 +271,24 @@ func (s *Service) matchRatesToRequest(request *dtos.RateCalculationRequest, rate
 		
 		// Check if this is PAN INDIA rate card
 		if strings.Contains(rateName, "PAN INDIA") || strings.Contains(rateName, "PAN-INDIA") {
-			panIndiaRate = rate
+			panIndiaRates = append(panIndiaRates, rate)
 			s.logger.Info("Found PAN INDIA rate card",
 				"rate_id", rate.ID,
 				"rate_card_name", rate.RateCardName)
-		} else if rate.IsPrimary {
-			primaryRate = rate
+		} else {
+			otherRates = append(otherRates, rate)
 		}
 	}
 
-	// Determine which rates to use
-	var ratesToProcess []*BaralRate
-	if panIndiaRate != nil {
-		// Use PAN INDIA rate card for across India coverage
-		ratesToProcess = []*BaralRate{panIndiaRate}
-		s.logger.Info("Using PAN INDIA rate card for across India coverage",
-			"rate_card_name", panIndiaRate.RateCardName)
-	} else if primaryRate != nil {
-		// Fallback to primary rate card
-		ratesToProcess = []*BaralRate{primaryRate}
-		s.logger.Info("Using primary rate card (PAN INDIA not found)",
-			"rate_card_name", primaryRate.RateCardName)
-	} else {
-		// Use all rates if no PAN INDIA or primary found
-		ratesToProcess = make([]*BaralRate, len(rates))
-		for i := range rates {
-			ratesToProcess[i] = &rates[i]
-		}
-		s.logger.Info("No PAN INDIA or primary rate card found, using all rate cards",
-			"total_rate_cards", len(rates))
-	}
+	// Combine: PAN INDIA first, then all others
+	ratesToProcess := make([]*BaralRate, 0, len(rates))
+	ratesToProcess = append(ratesToProcess, panIndiaRates...)
+	ratesToProcess = append(ratesToProcess, otherRates...)
+
+	s.logger.Info("Sorted rate cards with PAN INDIA first",
+		"pan_india_count", len(panIndiaRates),
+		"other_count", len(otherRates),
+		"total_rate_cards", len(ratesToProcess))
 
 	for _, rate := range ratesToProcess {
 		// Check if rate is valid and enabled

@@ -1052,18 +1052,32 @@ func (s *RateService) convertQuoteRequestToRateRequest(req *dtos.QuoteRequest) *
 // Helper method to convert internal rate response to simplified rates
 func (s *RateService) convertRateResponseToRates(resp *dtos.RateCalculationResponse) []dtos.Rate {
 	rates := make([]dtos.Rate, 0, len(resp.Quotes))
-	serviceType:= ""
 	for _, quote := range resp.Quotes {
-		serviceType = quote.ServiceType
+		// Use ServiceLevel (rate card name) if available, otherwise use ServiceType
+		serviceName := quote.ServiceLevel
+		if serviceName == "" {
+			serviceName = quote.ServiceType
+		}
+		
+		// Build description with rate card name if available
+		description := quote.Description
+		if quote.ServiceLevel != "" && quote.ServiceLevel != quote.ServiceType {
+			if description != "" {
+				description = fmt.Sprintf("%s - %s", quote.ServiceLevel, description)
+			} else {
+				description = quote.ServiceLevel
+			}
+		}
+		
 		rate := dtos.Rate{
 			RateID:  quote.QuoteID,
-			Service: serviceType,
-			Description: quote.Description,
+			Service: serviceName, // Use rate card name (ServiceLevel) instead of just service type
+			Description: description,
 			Price: dtos.Price{
 				Currency:    quote.Currency,
 				Amount:      quote.TotalPrice,
 				Type:        "standard",
-				ServiceType: serviceType,
+				ServiceType: quote.ServiceType,
 			},
 		}
 
