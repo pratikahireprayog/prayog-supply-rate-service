@@ -159,24 +159,102 @@ func (r *BaralRate) GetDocketCharges() float64 {
 	return charges
 }
 
-// CalculatePrice calculates the total price for given weight
-func (r *BaralRate) CalculatePrice(weightKg float64) float64 {
+// CalculatePrice calculates the total price for given weight and distance
+// This implements weight-based pricing similar to Shipcube
+func (r *BaralRate) CalculatePrice(weightKg float64, distanceKm float64) float64 {
 	minimumFreight := r.GetMinimumFreightINR()
+	minimumWeight := r.GetMinimumWeightKg()
 	
-	// For now, return minimum freight as base price
-	// In production, you'd implement proper rate calculation based on weight slabs
+	// Use minimum weight if actual weight is less
+	actualWeight := weightKg
+	if weightKg < minimumWeight && minimumWeight > 0 {
+		actualWeight = minimumWeight
+	}
+	
+	// Base price calculation: minimum freight + weight-based charge
+	// For weight-based: assume per kg rate based on minimum freight
+	// This is a simplified calculation - in production, you'd have weight slabs
 	basePrice := minimumFreight
 	
-	// Add fuel surcharge
+	// If weight exceeds minimum, add additional weight charges
+	// Formula: basePrice + (excess_weight * per_kg_rate)
+	// Per kg rate is estimated as minimum_freight / minimum_weight
+	if actualWeight > minimumWeight && minimumWeight > 0 {
+		perKgRate := minimumFreight / minimumWeight
+		excessWeight := actualWeight - minimumWeight
+		weightCharge := excessWeight * perKgRate
+		basePrice = minimumFreight + weightCharge
+	}
+	
+	// Apply distance-based ODA charges if applicable
+	odaCharge := r.CalculateODACharge(weightKg, distanceKm)
+	
+	// Add fuel surcharge (percentage of base price)
 	fuelSurchargePercent := r.GetFuelSurchargePercent()
 	fuelSurcharge := basePrice * (fuelSurchargePercent / 100)
 	
 	// Add docket charges
 	docketCharges := r.GetDocketCharges()
 	
+	// Add green tax if applicable
+	greenTax := r.GetGreenTax()
+	
+	// Add platform fee if applicable
+	platformFee := r.GetPlatformFee()
+	
 	// Calculate total
-	totalPrice := basePrice + fuelSurcharge + docketCharges
+	totalPrice := basePrice + fuelSurcharge + docketCharges + odaCharge + greenTax + platformFee
 	
 	return totalPrice
+}
+
+// CalculateODACharge calculates Out of Delivery Area charges based on distance
+func (r *BaralRate) CalculateODACharge(weightKg float64, distanceKm float64) float64 {
+	// ODA charges apply for distances beyond certain thresholds
+	// ODA1: typically for distances 50-100 km
+	// ODA2: typically for distances > 100 km
+	
+	if distanceKm <= 50 {
+		// No ODA charge for local deliveries
+		return 0
+	}
+	
+	if distanceKm > 50 && distanceKm <= 100 {
+		// Apply ODA1 charges
+		if r.ODA.ODA1.PerKgAmount > 0 {
+			return r.ODA.ODA1.PerKgAmount * weightKg
+		}
+		return r.ODA.ODA1.TotalAmount
+	}
+	
+	if distanceKm > 100 {
+		// Apply ODA2 charges (higher)
+		if r.ODA.ODA2.PerKgAmount > 0 {
+			return r.ODA.ODA2.PerKgAmount * weightKg
+		}
+		return r.ODA.ODA2.TotalAmount
+	}
+	
+	return 0
+}
+
+// GetGreenTax returns green tax amount
+func (r *BaralRate) GetGreenTax() float64 {
+	if r.AdditionalCharges.GreenTax == "" {
+		return 0
+	}
+	var tax float64
+	fmt.Sscanf(r.AdditionalCharges.GreenTax, "%f", &tax)
+	return tax
+}
+
+// GetPlatformFee returns platform fee amount
+func (r *BaralRate) GetPlatformFee() float64 {
+	if r.AdditionalCharges.PlatformFee == "" {
+		return 0
+	}
+	var fee float64
+	fmt.Sscanf(r.AdditionalCharges.PlatformFee, "%f", &fee)
+	return fee
 }
 

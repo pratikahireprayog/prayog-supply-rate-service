@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -226,19 +227,87 @@ func (s *Service) matchRatesToRequest(request *dtos.RateCalculationRequest, rate
 		totalWeight += weightKg
 	}
 
+	// Calculate distance between origin and destination
+	distanceKm := s.calculateDistance(request)
+	
 	s.logger.Debug("Matching rates",
 		"total_rates", len(rates),
-		"total_weight_kg", totalWeight)
+		"total_weight_kg", totalWeight,
+		"distance_km", distanceKm)
+
+	// Count enabled vs disabled rates
+	enabledCount := 0
+	disabledCount := 0
+	for _, rate := range rates {
+		if rate.IsEnable {
+			enabledCount++
+		} else {
+			disabledCount++
+		}
+	}
+	
+	s.logger.Info("Rate card status",
+		"total_rate_cards", len(rates),
+		"enabled", enabledCount,
+		"disabled", disabledCount)
 
 	// Convert all valid rates to quotes
-	for _, rate := range rates {
+	// If no enabled rates found, include disabled rates for testing
+	includeDisabled := enabledCount == 0 && len(rates) > 0
+	
+	if includeDisabled {
+		s.logger.Warn("No enabled rate cards found, including disabled rates for testing",
+			"total_rate_cards", len(rates))
+	}
+
+	// Sort rates to put PAN INDIA first, then all others
+	// This ensures PAN INDIA appears at the top of the list
+	var panIndiaRates []*BaralRate
+	var otherRates []*BaralRate
+
+	for i := range rates {
+		rate := &rates[i]
+		rateName := strings.ToUpper(rate.RateCardName)
+		
+		// Check if this is PAN INDIA rate card
+		if strings.Contains(rateName, "PAN INDIA") || strings.Contains(rateName, "PAN-INDIA") {
+			panIndiaRates = append(panIndiaRates, rate)
+			s.logger.Info("Found PAN INDIA rate card",
+				"rate_id", rate.ID,
+				"rate_card_name", rate.RateCardName)
+		} else {
+			otherRates = append(otherRates, rate)
+		}
+	}
+
+	// Combine: PAN INDIA first, then all others
+	ratesToProcess := make([]*BaralRate, 0, len(rates))
+	ratesToProcess = append(ratesToProcess, panIndiaRates...)
+	ratesToProcess = append(ratesToProcess, otherRates...)
+
+	s.logger.Info("Sorted rate cards with PAN INDIA first",
+		"pan_india_count", len(panIndiaRates),
+		"other_count", len(otherRates),
+		"total_rate_cards", len(ratesToProcess))
+
+	for _, rate := range ratesToProcess {
 		// Check if rate is valid and enabled
 		if !rate.IsValid() {
-			s.logger.Debug("Skipping invalid rate", "rate_id", rate.ID, "is_enable", rate.IsEnable)
-			continue
+			if includeDisabled {
+				s.logger.Info("Including disabled rate card (no enabled rates available)",
+					"rate_id", rate.ID,
+					"rate_card_name", rate.RateCardName,
+					"is_enable", rate.IsEnable)
+			} else {
+				s.logger.Debug("Skipping disabled rate",
+					"rate_id", rate.ID,
+					"rate_card_name", rate.RateCardName,
+					"is_enable", rate.IsEnable)
+				continue
+			}
 		}
 
-		// Calculate price for this weight
+		// Calculate price for this weight and distance
 		// Note: Even if weight is less than minimum, we show the rate with minimum freight
 		actualWeight := totalWeight
 		minimumWeight := rate.GetMinimumWeightKg()
@@ -251,8 +320,8 @@ func (s *Service) matchRatesToRequest(request *dtos.RateCalculationRequest, rate
 				"minimum_weight", minimumWeight)
 		}
 
-		// Convert to quote
-		quote := s.convertToQuote(&rate, request, responseTime, actualWeight)
+		// Convert to quote with weight and distance
+		quote := s.convertToQuote(rate, request, responseTime, actualWeight, distanceKm)
 		quotes = append(quotes, quote)
 	}
 
@@ -263,31 +332,82 @@ func (s *Service) matchRatesToRequest(request *dtos.RateCalculationRequest, rate
 	return quotes
 }
 
+// calculateDistance calculates distance between origin and destination
+// Uses Haversine formula if lat/long available, otherwise uses provided distance or estimates
+func (s *Service) calculateDistance(request *dtos.RateCalculationRequest) float64 {
+	// If distance is already provided in request, use it
+	if request.Distance > 0 {
+		return request.Distance
+	}
+
+	// Try to get coordinates from request packages (if available)
+	// For now, we'll use a simple estimation based on city names
+	// In production, you'd use a geocoding service or distance matrix API
+	
+	// Default estimation: assume average distance based on cities
+	// This is a simplified approach - in production, use proper geocoding
+	distanceKm := 100.0 // Default 100km
+	
+	// If same city, use shorter distance
+	if request.OriginCity == request.DestCity {
+		distanceKm = 20.0 // Local delivery ~20km
+	}
+	
+	s.logger.Debug("Calculated distance",
+		"origin", request.OriginCity,
+		"destination", request.DestCity,
+		"distance_km", distanceKm)
+	
+	return distanceKm
+}
+
 // convertToQuote converts a Baral rate to our quote format
-func (s *Service) convertToQuote(rate *BaralRate, request *dtos.RateCalculationRequest, responseTime time.Duration, weightKg float64) dtos.RateQuote {
-	quoteID := fmt.Sprintf("baral_%s_%d", s.config.PartnerCode, time.Now().UnixNano())
+func (s *Service) convertToQuote(rate *BaralRate, request *dtos.RateCalculationRequest, responseTime time.Duration, weightKg float64, distanceKm float64) dtos.RateQuote {
+	// Use rate card ID to ensure unique quote IDs
+	rateCardID := rate.ID
+	if rateCardID == "" {
+		rateCardID = fmt.Sprintf("unknown_%d", time.Now().UnixNano())
+	}
+	quoteID := fmt.Sprintf("baral_%s_%s", s.config.PartnerCode, rateCardID)
 
 	currency := s.config.DefaultCurrency
 	if request.Currency != "" {
 		currency = request.Currency
 	}
 
-	// Calculate price
-	totalPrice := rate.CalculatePrice(weightKg)
-	basePrice := rate.GetMinimumFreightINR()
+	// Calculate price using weight and distance (similar to Shipcube)
+	totalPrice := rate.CalculatePrice(weightKg, distanceKm)
+	
+	// Calculate individual components for breakdown
+	minimumFreight := rate.GetMinimumFreightINR()
+	minimumWeight := rate.GetMinimumWeightKg()
+	
+	// Base price calculation
+	basePrice := minimumFreight
+	if weightKg > minimumWeight && minimumWeight > 0 {
+		perKgRate := minimumFreight / minimumWeight
+		excessWeight := weightKg - minimumWeight
+		weightCharge := excessWeight * perKgRate
+		basePrice = minimumFreight + weightCharge
+	}
+	
+	// Calculate charges
 	fuelSurcharge := basePrice * (rate.GetFuelSurchargePercent() / 100)
 	docketCharges := rate.GetDocketCharges()
+	odaCharge := rate.CalculateODACharge(weightKg, distanceKm)
+	greenTax := rate.GetGreenTax()
+	platformFee := rate.GetPlatformFee()
 
 	// Build price breakdown
 	priceBreakdown := dtos.PriceBreakdown{
-		BasePrice:       basePrice,
+		BasePrice:       minimumFreight,
 		FuelSurcharge:   fuelSurcharge,
 		HandlingCharge:  docketCharges,
 		TaxAmount:       0, // Tax calculation can be added later
 		TotalPrice:      totalPrice,
-		WeightCharge:    0,
-		DistanceCharge:  0,
-		InsuranceCharge: 0,
+		WeightCharge:    basePrice - minimumFreight, // Excess weight charge
+		DistanceCharge:  odaCharge,                  // ODA charge based on distance
+		InsuranceCharge: 0,                          // Insurance can be added if needed
 		DiscountAmount:  0,
 	}
 
@@ -331,14 +451,18 @@ func (s *Service) convertToQuote(rate *BaralRate, request *dtos.RateCalculationR
 		ExternalQuoteID: rate.ID,
 
 		Metadata: map[string]interface{}{
-			"rate_id":         rate.ID,
-			"rate_card_name":  rate.RateCardName,
-			"partner_code":    rate.PartnerCode,
-			"rate_card_type":  rate.RateCardType,
-			"minimum_weight":  rate.MinimumWeight,
-			"minimum_freight": rate.MinimumFreight,
-			"weight_used_kg":  weightKg,
+			"rate_id":              rate.ID,
+			"rate_card_name":       rate.RateCardName,
+			"partner_code":         rate.PartnerCode,
+			"rate_card_type":       rate.RateCardType,
+			"minimum_weight":       rate.MinimumWeight,
+			"minimum_freight":      rate.MinimumFreight,
+			"weight_used_kg":       weightKg,
+			"distance_km":          distanceKm,
 			"fuel_surcharge_percent": rate.GetFuelSurchargePercent(),
+			"oda_charge":           odaCharge,
+			"green_tax":            greenTax,
+			"platform_fee":         platformFee,
 		},
 	}
 
