@@ -1190,14 +1190,41 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
         return india_post_domestic.NewService(s.logger, s.metrics, s.httpClient), nil
 	case "sunil_baral", "baral", "baral_rate":
 		s.logger.Info("Creating Baral Rate Card service", "partner_code", normalizedCode)
+		implementation := baral_rate.NewService(s.logger, s.metrics, s.httpClient)
+		
+		// Try to get partner config from database, but use defaults if not found
 		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get Baral partner: %w", err)
+			s.logger.Warn("Baral partner not found in database, using default configuration",
+				"partner_code", normalizedCode,
+				"error", err)
+			// Initialize with empty config to use defaults (from environment variables)
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Baral service with default config",
+					"error", initErr)
+			}
+			return implementation, nil
 		}
-		implementation := baral_rate.NewService(s.logger, s.metrics, s.httpClient)
-		if err := implementation.Initialize(partner.Config); err != nil {
-			return nil, fmt.Errorf("failed to initialize Baral service: %w", err)
+		
+		// Initialize with partner config if available
+		if partner.Config != nil && len(partner.Config) > 0 {
+			if err := implementation.Initialize(partner.Config); err != nil {
+				s.logger.Warn("Failed to initialize Baral service with partner config, using defaults",
+					"error", err)
+				// Try to initialize with empty config as fallback
+				if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+					s.logger.Warn("Failed to initialize Baral service with default config",
+						"error", initErr)
+				}
+			}
+		} else {
+			// Partner exists but has no config, initialize with defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Baral service with default config",
+					"error", initErr)
+			}
 		}
+		
 		return implementation, nil
 	case "shipcube", "dharmendra": //  dharmendra for testing purpose only
 		s.logger.Info("Creating Rate service Shipcube", "partner_code", normalizedCode)
