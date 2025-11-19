@@ -1185,7 +1185,7 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 			return nil, fmt.Errorf("failed to initialize Baral service: %w", err)
 		}
 		return implementation, nil
-	case "shipcube":
+	case "shipcube", "dharmendra": //  dharmendra for testing purpose only
 		s.logger.Info("Creating Rate service Shipcube", "partner_code", normalizedCode)
 		return shipcube.NewService(s.logger, s.metrics, s.httpClient), nil
 	default:
