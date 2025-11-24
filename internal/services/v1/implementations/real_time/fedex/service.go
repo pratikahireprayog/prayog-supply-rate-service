@@ -132,7 +132,6 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 
     // Make API call
     fedexResponse, err := s.callFedexAPI(ctx, fedexRequest)
-    s.logger.Info("fedexResponse" , fedexResponse)
     if err != nil {
         s.metrics.IncrementCounter("fedex_api_error", map[string]string{
             "error_type": "api_call_failed",
@@ -225,7 +224,7 @@ func (s *Service) convertToFedexRequest(req *dtos.RateCalculationRequest) (*Fede
             },
             PickupType:        "USE_SCHEDULED_PICKUP",
             RateRequestType:   []string{"LIST"},
-            PreferredCurrency: req.Currency,
+            PreferredCurrency: "INR",
             PackageCount:      1,
             RequestedPackageLineItems: []RequestedPackageLineItem{
                 {
@@ -473,7 +472,7 @@ func (s *Service) convertFromFedexResponse(
             currency = shipmentDetail.RatedPackages[0].PackageRateDetail.Currency
         }
         if currency == "" {
-            currency = "USD" // Default fallback
+            currency = "INR" // Default fallback
         }
 
         // Use TotalNetCharge as the price
@@ -658,7 +657,7 @@ func (s *Service) IsHealthy(ctx context.Context) error {
             },
             PickupType:        "USE_SCHEDULED_PICKUP",
             RateRequestType:   []string{"LIST"},
-            PreferredCurrency: "USD",
+            PreferredCurrency: "INR",
             PackageCount:      1,
             RequestedPackageLineItems: []RequestedPackageLineItem{
                 {
