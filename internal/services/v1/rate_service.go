@@ -18,6 +18,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
+	indiapostintl "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_international"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/naqel"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -1143,8 +1144,19 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "dhl":
 		s.logger.Info("Creating DHL service", "partner_code", normalizedCode)
 		return dhl.NewService(s.logger, s.metrics, s.httpClient), nil
-	case "india_post_international", "india_post":
+	case "india_post_international", "india_post_intl":
 		s.logger.Info("Creating India Post International service", "partner_code", normalizedCode)
+		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get India Post International partner: %w", err)
+		}
+		implementation := indiapostintl.NewService(s.logger, s.metrics, s.httpClient)
+		if err := implementation.Initialize(partner.Config); err != nil {
+			return nil, fmt.Errorf("failed to initialize India Post International service: %w", err)
+		}
+		return implementation, nil
+	case "india_post":
+		s.logger.Info("Creating India Post service", "partner_code", normalizedCode)
 		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get India Post partner: %w", err)
