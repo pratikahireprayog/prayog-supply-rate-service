@@ -14,6 +14,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/shipcube"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/delhivery"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
@@ -1198,9 +1199,43 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "blue_dart":
 		return nil, fmt.Errorf("Blue Dart implementation not yet available")
 	case "delhivery":
-		s.logger.Info("Redirecting Delhivery to Unified Rate service", "partner_code", normalizedCode)
-		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
-		return unified_rate.NewService(s.logger, s.metrics, s.httpClient, mockUnifiedRepo), nil
+		s.logger.Info("Creating Delhivery service", "partner_code", normalizedCode)
+		implementation := delhivery.NewService(s.logger, s.metrics, s.httpClient)
+		
+		// Try to get partner config from database, but use defaults if not found
+		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
+		if err != nil {
+			s.logger.Warn("Delhivery partner not found in database, using default configuration",
+				"partner_code", normalizedCode,
+				"error", err)
+			// Initialize with empty config to use defaults (from environment variables)
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Delhivery service with default config",
+					"error", initErr)
+			}
+			return implementation, nil
+		}
+		
+		// Initialize with partner config if available
+		if partner.Config != nil && len(partner.Config) > 0 {
+			if err := implementation.Initialize(partner.Config); err != nil {
+				s.logger.Warn("Failed to initialize Delhivery service with partner config, using defaults",
+					"error", err)
+				// Try to initialize with empty config as fallback
+				if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+					s.logger.Warn("Failed to initialize Delhivery service with default config",
+						"error", initErr)
+				}
+			}
+		} else {
+			// Partner exists but has no config, initialize with defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Delhivery service with default config",
+					"error", initErr)
+			}
+		}
+		
+		return implementation, nil
 	case "porter":
 		s.logger.Info("Redirecting Porter to Unified Rate service", "partner_code", normalizedCode)
 		mockUnifiedRepo := &MockUnifiedRateCardRepository{}
