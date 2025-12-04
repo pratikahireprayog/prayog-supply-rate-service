@@ -20,6 +20,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/baral_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/delhivery"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	indiapostintl "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_international"
@@ -430,6 +431,8 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 		switch strings.ToLower(partner.Code) {
 		case "dhl", "dhl_express":
 			return dhl.NewService(logger, metrics, httpClient), nil
+		case "delhivery":
+			return delhivery.NewService(logger, metrics, httpClient), nil
 		case "india_post":
 			return indiapost.NewService(logger, metrics, httpClient), nil
 		case "india_post_international", "india_post_intl":
@@ -506,6 +509,8 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 		switch strings.ToLower(partner.Code) {
 		case "dhl", "dhl_express":
 			return dhl.NewService(logger, metrics, httpClient), nil
+		case "delhivery":
+			return delhivery.NewService(logger, metrics, httpClient), nil
 		case "india_post":
 			return indiapost.NewService(logger, metrics, httpClient), nil
 		case "india_post_international", "india_post_intl":
