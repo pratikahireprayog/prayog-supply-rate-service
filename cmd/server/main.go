@@ -24,6 +24,7 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
 	indiapostintl "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_international"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/mover"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/naqel"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -437,6 +438,8 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 			return indiapost.NewService(logger, metrics, httpClient), nil
 		case "india_post_international", "india_post_intl":
 			return indiapostintl.NewService(logger, metrics, httpClient), nil
+		case "mover":
+			return mover.NewService(logger, metrics, httpClient), nil
 		case "naqel", "naqel_express":
 			return naqel.NewService(logger, metrics, httpClient), nil
 		default:
@@ -515,6 +518,8 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 			return indiapost.NewService(logger, metrics, httpClient), nil
 		case "india_post_international", "india_post_intl":
 			return indiapostintl.NewService(logger, metrics, httpClient), nil
+		case "mover":
+			return mover.NewService(logger, metrics, httpClient), nil
 		case "naqel", "naqel_express":
 			return naqel.NewService(logger, metrics, httpClient), nil
 		default:

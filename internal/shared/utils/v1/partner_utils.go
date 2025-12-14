@@ -45,6 +45,8 @@ func GetPartnerDisplayName(normalizedCode string) string {
 		return "Aramex"
 	case "delhivery":
 		return "Delhivery"
+	case "mover":
+		return "Mover"
 	default:
 		// Convert snake_case back to Title Case
 		parts := strings.Split(normalizedCode, "_")
@@ -65,6 +67,7 @@ func IsRealTimePartner(normalizedCode string) bool {
 		"ups":    true,
 		"aramex": true,
         "india_post_domestic": true,
+		"mover":  true,
 	}
 
 	return realTimePartners[normalizedCode]
