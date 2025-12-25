@@ -12,16 +12,19 @@ import (
 
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/baral_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/shipcube"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/smile"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/aramex"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/delhivery"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/fedex"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
-	india_post_domestic 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
+	india_post_domestic "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_domestic"
 	indiapostintl "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_international"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/mover"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/naqel"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/urbanbolt"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/xpressbees"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
@@ -1340,6 +1343,120 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "shipcube", "dharmendra": //  dharmendra for testing purpose only
 		s.logger.Info("Creating Rate service Shipcube", "partner_code", normalizedCode)
 		return shipcube.NewService(s.logger, s.metrics, s.httpClient), nil
+	case "smile":
+		s.logger.Info("Creating Smile Rate service", "partner_code", normalizedCode)
+		implementation := smile.NewService(s.logger, s.metrics, s.httpClient)
+		
+		// Try to get partner config from database, but use defaults if not found
+		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
+		if err != nil {
+			s.logger.Warn("Smile partner not found in database, using default configuration",
+				"partner_code", normalizedCode,
+				"error", err)
+			// Initialize with empty config to use defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Smile service with default config",
+					"error", initErr)
+			}
+			return implementation, nil
+		}
+		
+		// Initialize with partner config if available
+		if partner.Config != nil && len(partner.Config) > 0 {
+			if err := implementation.Initialize(partner.Config); err != nil {
+				s.logger.Warn("Failed to initialize Smile service with partner config, using defaults",
+					"error", err)
+				// Try to initialize with empty config as fallback
+				if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+					s.logger.Warn("Failed to initialize Smile service with default config",
+						"error", initErr)
+				}
+			}
+		} else {
+			// Partner exists but has no config, initialize with defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Smile service with default config",
+					"error", initErr)
+			}
+		}
+		
+		return implementation, nil
+	case "urbanbolt":
+		s.logger.Info("Creating Urbanbolt Rate service", "partner_code", normalizedCode)
+		implementation := urbanbolt.NewService(s.logger, s.metrics, s.httpClient)
+		
+		// Try to get partner config from database, but use defaults if not found
+		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
+		if err != nil {
+			s.logger.Warn("Urbanbolt partner not found in database, using default configuration",
+				"partner_code", normalizedCode,
+				"error", err)
+			// Initialize with empty config to use defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Urbanbolt service with default config",
+					"error", initErr)
+			}
+			return implementation, nil
+		}
+		
+		// Initialize with partner config if available
+		if partner.Config != nil && len(partner.Config) > 0 {
+			if err := implementation.Initialize(partner.Config); err != nil {
+				s.logger.Warn("Failed to initialize Urbanbolt service with partner config, using defaults",
+					"error", err)
+				// Try to initialize with empty config as fallback
+				if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+					s.logger.Warn("Failed to initialize Urbanbolt service with default config",
+						"error", initErr)
+				}
+			}
+		} else {
+			// Partner exists but has no config, initialize with defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Urbanbolt service with default config",
+					"error", initErr)
+			}
+		}
+		
+		return implementation, nil
+	case "xpressbees":
+		s.logger.Info("Creating Xpressbees Rate service", "partner_code", normalizedCode)
+		implementation := xpressbees.NewService(s.logger, s.metrics, s.httpClient)
+		
+		// Try to get partner config from database, but use defaults if not found
+		partner, err := s.partnerRepo.GetByCode(context.Background(), normalizedCode)
+		if err != nil {
+			s.logger.Warn("Xpressbees partner not found in database, using default configuration",
+				"partner_code", normalizedCode,
+				"error", err)
+			// Initialize with empty config to use defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Xpressbees service with default config",
+					"error", initErr)
+			}
+			return implementation, nil
+		}
+		
+		// Initialize with partner config if available
+		if partner.Config != nil && len(partner.Config) > 0 {
+			if err := implementation.Initialize(partner.Config); err != nil {
+				s.logger.Warn("Failed to initialize Xpressbees service with partner config, using defaults",
+					"error", err)
+				// Try to initialize with empty config as fallback
+				if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+					s.logger.Warn("Failed to initialize Xpressbees service with default config",
+						"error", initErr)
+				}
+			}
+		} else {
+			// Partner exists but has no config, initialize with defaults
+			if initErr := implementation.Initialize(map[string]interface{}{}); initErr != nil {
+				s.logger.Warn("Failed to initialize Xpressbees service with default config",
+					"error", initErr)
+			}
+		}
+		
+		return implementation, nil
 	default:
 		return nil, fmt.Errorf("unknown partner code: %s", normalizedCode)
 	}

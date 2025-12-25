@@ -1,23 +1,5 @@
 package delhivery
 
-// LoginRequest represents the login request to Delhivery API
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-// LoginResponse represents the login response from Delhivery API
-type LoginResponse struct {
-	Success   bool      `json:"success"`
-	RequestID string    `json:"request_id,omitempty"`
-	Data      LoginData `json:"data"`
-}
-
-// LoginData contains the authentication data
-type LoginData struct {
-	JWT string `json:"jwt"`
-}
-
 // FreightEstimateRequest represents the freight estimate request
 type FreightEstimateRequest struct {
 	Dimensions []Dimension `json:"dimensions"`
