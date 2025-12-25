@@ -1,4 +1,4 @@
-package unified_rate
+package xpressbees
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	interfaces "github.com/prayog/prayog-supply-rate-service/internal/shared/interfaces/v1"
 )
 
-// AuthService handles authentication for Prayog Unified API
+// AuthService handles authentication for Xpressbees API using Prayog auth
 type AuthService struct {
 	httpClient interfaces.HTTPClient
-	logger     interfaces.Logger
-	config     *AuthConfig
-	token      *TokenInfo
-	mutex      sync.RWMutex
+	logger      interfaces.Logger
+	config      *AuthConfig
+	token       *TokenInfo
+	mutex       sync.RWMutex
 }
 
 // AuthConfig holds authentication configuration
@@ -25,6 +25,7 @@ type AuthConfig struct {
 	Username      string `json:"username"`
 	Password      string `json:"password"`
 	SigninType    string `json:"signin_type"`
+	TenantID      string `json:"tenant_id"` // Optional tenant ID to pass in login request
 	TimeoutMs     int    `json:"timeout_ms"`
 	RefreshBuffer int    `json:"refresh_buffer_minutes"` // Refresh token before expiry
 }
@@ -78,8 +79,8 @@ func NewAuthService(httpClient interfaces.HTTPClient, logger interfaces.Logger) 
 		logger:     logger,
 		config: &AuthConfig{
 			LoginURL:      "https://sandbox-apis.prayog.io/auth/login",
-			Username:      "avinash.singh@prayog.io",
-			Password:      "Prayog@Avinash539",
+			Username:      "uday@viasetu.com",
+			Password:      "Demand@123",
 			SigninType:    "EMAIL",
 			TimeoutMs:     15000, // 15 seconds
 			RefreshBuffer: 30,    // Refresh 30 minutes before expiry
@@ -103,6 +104,9 @@ func (a *AuthService) UpdateConfig(config map[string]interface{}) error {
 	}
 	if signinType, ok := config["signin_type"].(string); ok {
 		a.config.SigninType = signinType
+	}
+	if tenantID, ok := config["tenant_id"].(string); ok {
+		a.config.TenantID = tenantID
 	}
 	if timeoutMs, ok := config["timeout_ms"].(int); ok {
 		a.config.TimeoutMs = timeoutMs
@@ -160,6 +164,11 @@ func (a *AuthService) refreshToken(ctx context.Context) (string, error) {
 		return fmt.Sprintf("Bearer %s", a.token.IDToken), nil
 	}
 
+	// If credentials are not configured, return error
+	if a.config.Username == "" || a.config.Password == "" {
+		return "", fmt.Errorf("authentication credentials not configured")
+	}
+
 	a.logger.Info("Refreshing authentication token")
 
 	// Prepare login request
@@ -185,7 +194,7 @@ func (a *AuthService) refreshToken(ctx context.Context) (string, error) {
 		"sec-ch-ua-mobile":   "?0",
 		"sec-ch-ua-platform": `"macOS"`,
 	}
-	
+
 	// Note: tenantId header is not sent in login request to match the working API behavior
 	// The tenantId can be used for API calls after authentication, but login uses user's default tenant
 
@@ -194,12 +203,20 @@ func (a *AuthService) refreshToken(ctx context.Context) (string, error) {
 	defer cancel()
 
 	// Make login request
+	a.logger.Debug("Authentication request",
+		"url", a.config.LoginURL,
+		"username", a.config.Username,
+		"signin_type", a.config.SigninType)
+
 	httpResponse, err := a.httpClient.Post(authCtx, a.config.LoginURL, loginRequest, headers)
 	if err != nil {
 		a.logger.Error("Authentication request failed", "error", err)
 		return "", fmt.Errorf("authentication request failed: %w", err)
 	}
 
+	a.logger.Debug("Authentication response",
+		"status_code", httpResponse.StatusCode,
+		"response_body", string(httpResponse.Body))
 	if httpResponse.StatusCode != 200 {
 		a.logger.Error("Authentication API returned error",
 			"status_code", httpResponse.StatusCode,
@@ -309,15 +326,6 @@ func (a *AuthService) ValidateConfig() error {
 	if a.config.LoginURL == "" {
 		return fmt.Errorf("login_url is required")
 	}
-	if a.config.Username == "" {
-		return fmt.Errorf("username is required")
-	}
-	if a.config.Password == "" {
-		return fmt.Errorf("password is required")
-	}
-	if a.config.SigninType == "" {
-		return fmt.Errorf("signin_type is required")
-	}
 	if a.config.TimeoutMs <= 0 {
 		return fmt.Errorf("timeout_ms must be positive")
 	}
@@ -327,3 +335,4 @@ func (a *AuthService) ValidateConfig() error {
 
 	return nil
 }
+

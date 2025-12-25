@@ -20,7 +20,7 @@ type Service struct {
 	metrics       interfaces.MetricsCollector
 	httpClient    interfaces.HTTPClient
 	config        *Config
-	authManager   *AuthManager
+	authService   *AuthService
 	isInitialized bool
 }
 
@@ -62,8 +62,31 @@ func (s *Service) Initialize(config map[string]interface{}) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Initialize auth manager
-	s.authManager = NewAuthManager(s.config, s.httpClient, s.logger)
+	// Initialize auth service
+	s.authService = NewAuthService(s.httpClient, s.logger)
+	
+	// Update auth config if provided
+	authConfigMap := make(map[string]interface{})
+	if username, ok := config["username"].(string); ok {
+		authConfigMap["username"] = username
+	}
+	if password, ok := config["password"].(string); ok {
+		authConfigMap["password"] = password
+	}
+	if loginURL, ok := config["login_url"].(string); ok {
+		authConfigMap["login_url"] = loginURL
+	}
+	if signinType, ok := config["signin_type"].(string); ok {
+		authConfigMap["signin_type"] = signinType
+	}
+	if tenantID, ok := config["tenant_id"].(string); ok {
+		authConfigMap["tenant_id"] = tenantID
+	}
+	if len(authConfigMap) > 0 {
+		if err := s.authService.UpdateConfig(authConfigMap); err != nil {
+			s.logger.Warn("Failed to update auth configuration", "error", err)
+		}
+	}
 
 	s.isInitialized = true
 
@@ -101,7 +124,7 @@ func (s *Service) IsHealthy(ctx context.Context) error {
 
 	// Check if we can get a valid token
 	startTime := time.Now()
-	_, err := s.authManager.GetToken(ctx)
+	_, err := s.authService.GetBearerToken(ctx)
 	if err != nil {
 		s.logger.Warn("Delhivery API health check failed - authentication", "error", err, "duration_ms", time.Since(startTime).Milliseconds())
 		return fmt.Errorf("Delhivery API authentication failed: %w", err)
@@ -165,7 +188,7 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 // fetchRate fetches a rate from Delhivery API
 func (s *Service) fetchRate(ctx context.Context, estimateReq *FreightEstimateRequest, originalReq *dtos.RateCalculationRequest) (*dtos.RateQuote, error) {
 	// Get authentication token
-	token, err := s.authManager.GetToken(ctx)
+	bearerToken, err := s.authService.GetBearerToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication token: %w", err)
 	}
@@ -173,7 +196,7 @@ func (s *Service) fetchRate(ctx context.Context, estimateReq *FreightEstimateReq
 	// Prepare headers
 	headers := map[string]string{
 		"Content-Type":  "application/json",
-		"Authorization": fmt.Sprintf("Bearer %s", token),
+		"Authorization": bearerToken,
 	}
 
 	// Make API call
@@ -206,10 +229,10 @@ func (s *Service) fetchRate(ctx context.Context, estimateReq *FreightEstimateReq
 			}
 		}
 
-		// If 401, invalidate token and retry once
+		// If 401, clear token and retry once
 		if httpResponse.StatusCode == http.StatusUnauthorized {
-			s.logger.Info("Received 401, invalidating token")
-			s.authManager.InvalidateToken()
+			s.logger.Info("Received 401, clearing token")
+			s.authService.ClearToken()
 		}
 
 		return nil, fmt.Errorf("Delhivery API returned status %d: %s", httpResponse.StatusCode, string(httpResponse.Body))
