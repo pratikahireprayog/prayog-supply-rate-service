@@ -2,7 +2,8 @@ package smile
 
 // RateCardMapping holds the rate card ID mappings for smile service
 var RateCardMapping = map[string]string{
-	"smile": "b6ab836d-0f0c-4ad6-a01a-a626e48f2efa",
+	"smile":       "b6ab836d-0f0c-4ad6-a01a-a626e48f2efa",
+	"smile_ecomm": "b6ab836d-0f0c-4ad6-a01a-a626e48f2efa",
 	// Add more mappings here as needed
 	// "partner_code": "rate_card_id",
 }
@@ -12,7 +13,10 @@ func GetRateCardID(partnerCode string) string {
 	if rateCardID, exists := RateCardMapping[partnerCode]; exists {
 		return rateCardID
 	}
-	// Return default rate card ID for smile
+	// Return default rate card ID for smile_ecomm (or smile for backward compatibility)
+	if rateCardID, exists := RateCardMapping["smile_ecomm"]; exists {
+		return rateCardID
+	}
 	return RateCardMapping["smile"]
 }
 

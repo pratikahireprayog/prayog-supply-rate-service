@@ -195,6 +195,10 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 
 		// Convert urbanbolt API response to our format
 		quotes := s.convertFromUrbanboltAPIResponse(urbanboltResponse, request, serviceType, quoteIndex, time.Since(startTime))
+		s.logger.Debug("Urbanbolt rate fetch completed",
+			"service_type", serviceType,
+			"quotes_count", len(quotes),
+			"response_status", urbanboltResponse.Status)
 		allQuotes = append(allQuotes, quotes...)
 	}
 

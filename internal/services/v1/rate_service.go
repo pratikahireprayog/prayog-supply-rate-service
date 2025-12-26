@@ -1343,7 +1343,7 @@ func (s *RateService) createImplementationByCode(normalizedCode string) (interfa
 	case "shipcube", "dharmendra": //  dharmendra for testing purpose only
 		s.logger.Info("Creating Rate service Shipcube", "partner_code", normalizedCode)
 		return shipcube.NewService(s.logger, s.metrics, s.httpClient), nil
-	case "smile":
+	case "smile", "smile_ecomm":
 		s.logger.Info("Creating Smile Rate service", "partner_code", normalizedCode)
 		implementation := smile.NewService(s.logger, s.metrics, s.httpClient)
 		
