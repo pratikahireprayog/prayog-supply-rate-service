@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -146,57 +147,11 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 		"service_type", request.ServiceType)
 
 	// Xpressbees supports SURFACE and AIR service types
-	// We need to fetch rates for both service types
+	// We need to fetch rates for both service types in parallel
 	serviceTypes := []string{"SURFACE", "AIR"}
 
-	var allQuotes []dtos.RateQuote
-	var errors []dtos.ProviderError
-
-	// Fetch rates for both SURFACE and AIR
-	for quoteIndex, serviceType := range serviceTypes {
-		// Create a copy of the request with the specific service type
-		serviceRequest := s.createServiceRequest(request, serviceType)
-		
-		// Convert our request to xpressbees API format
-		xpressbeesRequest, err := s.convertToXpressbeesAPIRequest(serviceRequest, serviceType)
-		if err != nil {
-			s.logger.Warn("Failed to convert request to xpressbees API format",
-				"service_type", serviceType,
-				"error", err)
-			errors = append(errors, dtos.ProviderError{
-				PartnerID:    "xpressbees",
-				PartnerName:  "Xpressbees Rate",
-				ErrorCode:    "CONVERSION_ERROR",
-				ErrorMessage: fmt.Sprintf("Failed to convert request for %s: %v", serviceType, err),
-				Timestamp:    time.Now(),
-			})
-			continue
-		}
-
-		// Call xpressbees API
-		requestJSON, _ := json.Marshal(xpressbeesRequest)
-		s.logger.Debug("Calling xpressbees API", 
-			"service_type", serviceType, 
-			"request", string(requestJSON))
-		xpressbeesResponse, err := s.callXpressbeesAPI(ctx, xpressbeesRequest)
-		if err != nil {
-			s.logger.Warn("Xpressbees API call failed",
-				"service_type", serviceType,
-				"error", err)
-			errors = append(errors, dtos.ProviderError{
-				PartnerID:    "xpressbees",
-				PartnerName:  "Xpressbees Rate",
-				ErrorCode:    "API_CALL_FAILED",
-				ErrorMessage: fmt.Sprintf("API call failed for %s: %v", serviceType, err),
-				Timestamp:    time.Now(),
-			})
-			continue
-		}
-
-		// Convert xpressbees API response to our format
-		quotes := s.convertFromXpressbeesAPIResponse(xpressbeesResponse, request, serviceType, quoteIndex, time.Since(startTime))
-		allQuotes = append(allQuotes, quotes...)
-	}
+	// Fetch rates in parallel using goroutines
+	allQuotes, errors := s.fetchRatesParallel(ctx, request, serviceTypes, startTime)
 
 	// Create response with all quotes
 	response := &dtos.RateCalculationResponse{
@@ -256,6 +211,94 @@ func (s *Service) createServiceRequest(req *dtos.RateCalculationRequest, xpressb
 	serviceRequest := *req
 	// The service type mapping will be handled in convertToXpressbeesAPIRequest
 	return &serviceRequest
+}
+
+// fetchRatesParallel fetches rates for multiple service types in parallel
+func (s *Service) fetchRatesParallel(ctx context.Context, request *dtos.RateCalculationRequest, serviceTypes []string, startTime time.Time) ([]dtos.RateQuote, []dtos.ProviderError) {
+	// Create channels for results
+	quoteChan := make(chan []dtos.RateQuote, len(serviceTypes))
+	errorChan := make(chan dtos.ProviderError, len(serviceTypes))
+
+	var wg sync.WaitGroup
+
+	for quoteIndex, serviceType := range serviceTypes {
+		wg.Add(1)
+		go func(st string, index int) {
+			defer wg.Done()
+
+			// Check context cancellation
+			select {
+			case <-ctx.Done():
+				s.logger.Warn("Context cancelled during rate fetching", "service_type", st)
+				return
+			default:
+			}
+
+			// Create a copy of the request with the specific service type
+			serviceRequest := s.createServiceRequest(request, st)
+
+			// Convert our request to xpressbees API format
+			xpressbeesRequest, err := s.convertToXpressbeesAPIRequest(serviceRequest, st)
+			if err != nil {
+				s.logger.Warn("Failed to convert request to xpressbees API format",
+					"service_type", st,
+					"error", err)
+				errorChan <- dtos.ProviderError{
+					PartnerID:    "xpressbees",
+					PartnerName:  "Xpressbees Rate",
+					ErrorCode:    "CONVERSION_ERROR",
+					ErrorMessage: fmt.Sprintf("Failed to convert request for %s: %v", st, err),
+					Timestamp:    time.Now(),
+				}
+				return
+			}
+
+			// Call xpressbees API
+			requestJSON, _ := json.Marshal(xpressbeesRequest)
+			s.logger.Debug("Calling xpressbees API",
+				"service_type", st,
+				"request", string(requestJSON))
+			xpressbeesResponse, err := s.callXpressbeesAPI(ctx, xpressbeesRequest)
+			if err != nil {
+				s.logger.Warn("Xpressbees API call failed",
+					"service_type", st,
+					"error", err)
+				errorChan <- dtos.ProviderError{
+					PartnerID:    "xpressbees",
+					PartnerName:  "Xpressbees Rate",
+					ErrorCode:    "API_CALL_FAILED",
+					ErrorMessage: fmt.Sprintf("API call failed for %s: %v", st, err),
+					Timestamp:    time.Now(),
+				}
+				return
+			}
+
+			// Convert xpressbees API response to our format
+			quotes := s.convertFromXpressbeesAPIResponse(xpressbeesResponse, request, st, index, time.Since(startTime))
+			quoteChan <- quotes
+		}(serviceType, quoteIndex)
+	}
+
+	// Wait for all goroutines to complete
+	go func() {
+		wg.Wait()
+		close(quoteChan)
+		close(errorChan)
+	}()
+
+	// Collect results from channels
+	var allQuotes []dtos.RateQuote
+	var errors []dtos.ProviderError
+
+	for quotes := range quoteChan {
+		allQuotes = append(allQuotes, quotes...)
+	}
+
+	for err := range errorChan {
+		errors = append(errors, err)
+	}
+
+	return allQuotes, errors
 }
 
 // convertToXpressbeesAPIRequest converts our request format to xpressbees API format
