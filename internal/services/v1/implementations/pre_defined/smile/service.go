@@ -329,7 +329,7 @@ func (s *Service) convertToSmileAPIRequest(req *dtos.RateCalculationRequest, smi
 	// Get rate card ID from config or use default from mapping
 	rateCardID := s.config.RateCardID
 	if rateCardID == "" {
-		rateCardID = GetRateCardID("smile")
+		rateCardID = GetRateCardID("smile_ecomm")
 	}
 	
 	smileRequest := &SmileRateRequest{
@@ -507,7 +507,7 @@ func (s *Service) performHealthCheck(ctx context.Context) error {
 	// Create a minimal test request to check API connectivity
 	rateCardID := s.config.RateCardID
 	if rateCardID == "" {
-		rateCardID = GetRateCardID("smile")
+		rateCardID = GetRateCardID("smile_ecomm")
 	}
 	
 	testRequest := &SmileRateRequest{

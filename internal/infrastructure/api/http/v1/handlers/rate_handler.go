@@ -68,11 +68,18 @@ func (h *RateHandler) GetQuotes(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(utils.ValidationErrorResponse(err))
 	}
 
+	// Extract partner codes for logging
+	partnerCodes := make([]string, len(req.Partners))
+	for i, partner := range req.Partners {
+		partnerCodes[i] = partner.Code
+	}
+
 	h.logger.Info("Processing quote request",
 		"request_id", requestID,
 		"source_postal_code", req.SourceLocation.PostalCode,
 		"destination_postal_code", req.DestinationLocation.PostalCode,
-		"partners_count", len(req.Partners))
+		"partners_count", len(req.Partners),
+		"requested_partners", partnerCodes)
 
 	// Call service
 	response, err := h.rateService.GetQuotes(c.Context(), &req, requestID)
