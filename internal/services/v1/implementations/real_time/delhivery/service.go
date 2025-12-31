@@ -222,7 +222,7 @@ func (s *Service) convertToQuote(item *KinkoRateItem, mode string, originalReq *
 		Currency:           "INR",
 		PriceBreakdown:     priceBreakdown,
 		ServiceType:        serviceTypeName,
-		ServiceLevel:       "standard",
+		ServiceLevel:       serviceTypeName,
 		ValidUntil:         time.Now().Add(7 * 24 * time.Hour),
 		Confidence:         1.0,
 		Source:             "delhivery_kinko_api",
