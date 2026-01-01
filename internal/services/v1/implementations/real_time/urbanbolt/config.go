@@ -59,13 +59,13 @@ func NewDefaultConfig() *Config {
 		MaxPackagesPerRequest: 10,
 
 		// Rate Calculation Configuration
-		DefaultServiceTypes: []string{"SURFACE", "AIR"},
+		DefaultServiceTypes: []string{"NDD", "SDD", "STANDARD"},
 		EnableAllServices:   true,
 		DefaultProductType:  "",
 
 		// Authentication Configuration
 		TenantID:   "6901d6e05021c666ba4bef43",
-		RateCardID: "6f67e45e-cd11-4c8a-820a-247324c20da2",
+		RateCardID: "27e926ed-03bb-4a23-ba98-ed8dde045222",
 
 		// Feature Flags
 		EnableHealthCheck:  true,
@@ -246,10 +246,13 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("at least one default service type is required")
 	}
 	validServiceTypes := map[string]bool{
-		"SURFACE": true,
-		"EXPRESS": true,
-		"AIR":     true,
-		"PREMIUM": true,
+		"SURFACE":  true,
+		"EXPRESS":  true,
+		"AIR":      true,
+		"PREMIUM":  true,
+		"NDD":      true,
+		"SDD":      true,
+		"STANDARD": true,
 	}
 	for _, serviceType := range c.DefaultServiceTypes {
 		if !validServiceTypes[serviceType] {
