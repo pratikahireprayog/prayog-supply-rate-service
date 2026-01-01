@@ -2,6 +2,7 @@ package urbanbolt
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -43,8 +44,8 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		// API Configuration
-		BaseURL:                "https://sandbox-apis.prayog.io/gateway/ure/api",
-		CalculateRatesEndpoint: "/external/rate-calculation/calculate-with-rate-card",
+		BaseURL:                getEnv("URBANBOLT_BASE_URL", "https://sandbox-apis.prayog.io/gateway/ure/api"),
+		CalculateRatesEndpoint: getEnv("URBANBOLT_ENDPOINT", "/external/rate-calculation/calculate-with-rate-card"),
 
 		// HTTP Configuration
 		TimeoutMs:  30000, // 30 seconds
@@ -64,8 +65,8 @@ func NewDefaultConfig() *Config {
 		DefaultProductType:  "",
 
 		// Authentication Configuration
-		TenantID:   "6901d6e05021c666ba4bef43",
-		RateCardID: "27e926ed-03bb-4a23-ba98-ed8dde045222",
+		TenantID:   getEnv("URBANBOLT_TENANT_ID", "6901d6e05021c666ba4bef43"),
+		RateCardID: getEnv("URBANBOLT_RATE_CARD_ID", "27e926ed-03bb-4a23-ba98-ed8dde045222"),
 
 		// Feature Flags
 		EnableHealthCheck:  true,
@@ -73,6 +74,15 @@ func NewDefaultConfig() *Config {
 		EnableDetailedLogs: false,
 	}
 }
+
+// getEnv reads an environment variable or returns a default value
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
 
 // UpdateFromMap updates configuration from a map of key-value pairs
 func (c *Config) UpdateFromMap(configMap map[string]interface{}) error {
