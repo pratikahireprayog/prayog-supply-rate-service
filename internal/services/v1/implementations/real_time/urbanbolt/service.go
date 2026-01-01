@@ -148,7 +148,7 @@ func (s *Service) GetRates(ctx context.Context, request *dtos.RateCalculationReq
 
 	// Urbanbolt supports SDD (Same Day Delivery) and NDD (Next Day Delivery)
 	// We need to fetch rates for both service types in parallel
-	serviceTypes := []string{"SDD", "NDD"}
+	serviceTypes := []string{"SDD", "NDD", "STANDARD"}
 
 	// Fetch rates in parallel using goroutines
 	allQuotes, errors := s.fetchRatesParallel(ctx, request, serviceTypes, startTime)
@@ -453,6 +453,8 @@ func (s *Service) convertFromUrbanboltAPIResponse(
 			quote.EstimatedDays = 0 // Same day
 		} else if urbanboltServiceType == "NDD" {
 			quote.EstimatedDays = 1 // Next day
+		} else if urbanboltServiceType == "STANDARD" {
+			quote.EstimatedDays = 3 // Standard delivery (typically 2-3 days)
 		}
 	}
 
@@ -561,7 +563,7 @@ func (s *Service) performHealthCheck(ctx context.Context) error {
 		RateCardID:          rateCardID,
 		FromPincode:         411015,
 		ToPincode:           411001,
-		ServiceType:         "SURFACE",
+		ServiceType:         "NDD",
 		ProductType:         s.config.DefaultProductType,
 		Weight:              1.0,
 		Length:              1.0,
@@ -595,6 +597,8 @@ func (s *Service) mapServiceTypeToUrbanbolt(serviceType string) string {
 		return "SDD"
 	case "standard", "NDD":
 		return "NDD"
+	case "STANDARD":
+		return "STANDARD"
 	case "express":
 		return "SDD"
 	case "premium":
@@ -610,6 +614,8 @@ func (s *Service) mapServiceTypeFromUrbanbolt(serviceType string) string {
 	case "SDD":
 		return "same_day"
 	case "NDD":
+		return "standard"
+	case "STANDARD":
 		return "standard"
 	case "EXPRESS":
 		return "same_day"
@@ -629,6 +635,8 @@ func (s *Service) getServiceDescription(serviceType string) string {
 		return "Same Day Delivery"
 	case "NDD":
 		return "Next Day Delivery"
+	case "STANDARD":
+		return "Standard Delivery"
 	case "EXPRESS":
 		return "Same Day Delivery"
 	case "SURFACE":

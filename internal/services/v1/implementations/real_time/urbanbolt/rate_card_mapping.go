@@ -2,7 +2,7 @@ package urbanbolt
 
 // RateCardMapping holds the rate card ID mappings for urbanbolt service
 var RateCardMapping = map[string]string{
-	"urbanbolt": "6f67e45e-cd11-4c8a-820a-247324c20da2",
+	"urbanbolt": "27e926ed-03bb-4a23-ba98-ed8dde045222",
 	// Add more mappings here as needed
 	// "partner_code": "rate_card_id",
 }
