@@ -2,10 +2,12 @@ package xpressbees
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
 // Config holds the configuration for Xpressbees API
+
 type Config struct {
 	// API Configuration
 	BaseURL                string `json:"base_url"`
@@ -43,8 +45,8 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		// API Configuration
-		BaseURL:                "https://sandbox-apis.prayog.io/gateway/ure/api",
-		CalculateRatesEndpoint: "/external/rate-calculation/calculate-with-rate-card",
+		BaseURL:                getEnv("XPRESSBEES_BASE_URL", "https://sandbox-apis.prayog.io/gateway/ure/api"),
+		CalculateRatesEndpoint: getEnv("XPRESSBEES_ENDPOINT", "/external/rate-calculation/calculate-with-rate-card"),
 
 		// HTTP Configuration
 		TimeoutMs:  30000, // 30 seconds
@@ -64,8 +66,8 @@ func NewDefaultConfig() *Config {
 		DefaultProductType:  "",
 
 		// Authentication Configuration
-		TenantID:   "6901d6e05021c666ba4bef43",
-		RateCardID: "24e617bd-b72f-4534-b721-63e2e70eafcc",
+		TenantID:   getEnv("XPRESSBEES_TENANT_ID", "6901d6e05021c666ba4bef43"),
+		RateCardID: getEnv("XPRESSBEES_RATE_CARD_ID", "2e81c571-6d31-44c3-bd5d-b566e70782bb"),
 
 		// Feature Flags
 		EnableHealthCheck:  true,
@@ -73,6 +75,15 @@ func NewDefaultConfig() *Config {
 		EnableDetailedLogs: false,
 	}
 }
+
+// getEnv reads an environment variable or returns a default value
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
 
 // UpdateFromMap updates configuration from a map of key-value pairs
 func (c *Config) UpdateFromMap(configMap map[string]interface{}) error {

@@ -2,10 +2,11 @@ package xpressbees
 
 // RateCardMapping holds the rate card ID mappings for xpressbees service
 var RateCardMapping = map[string]string{
-	"xpressbees": "24e617bd-b72f-4534-b721-63e2e70eafcc",
+	"xpressbees": getEnv("XPRESSBEES_RATE_CARD_ID", "2e81c571-6d31-44c3-bd5d-b566e70782bb"),
 	// Add more mappings here as needed
 	// "partner_code": "rate_card_id",
 }
+
 
 // GetRateCardID returns the rate card ID for a given partner code
 func GetRateCardID(partnerCode string) string {

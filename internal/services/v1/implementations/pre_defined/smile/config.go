@@ -2,6 +2,7 @@ package smile
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -43,8 +44,8 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		// API Configuration
-		BaseURL:                "https://sandbox-apis.prayog.io/gateway/ure/api",
-		CalculateRatesEndpoint: "/external/rate-calculation/calculate-with-rate-card",
+		BaseURL:                getEnv("SMILE_BASE_URL", "https://sandbox-apis.prayog.io/gateway/ure/api"),
+		CalculateRatesEndpoint: getEnv("SMILE_ENDPOINT", "/external/rate-calculation/calculate-with-rate-card"),
 
 		// HTTP Configuration
 		TimeoutMs:  30000, // 30 seconds
@@ -64,8 +65,8 @@ func NewDefaultConfig() *Config {
 		DefaultProductType:  "",
 
 		// Authentication Configuration
-		TenantID:   "6901d6e05021c666ba4bef43",
-		RateCardID: "b6ab836d-0f0c-4ad6-a01a-a626e48f2efa",
+		TenantID:   getEnv("SMILE_TENANT_ID", "6901d6e05021c666ba4bef43"),
+		RateCardID: getEnv("SMILE_RATE_CARD_ID", "b6ab836d-0f0c-4ad6-a01a-a626e48f2efa"),
 
 		// Feature Flags
 		EnableHealthCheck:  true,
@@ -73,6 +74,15 @@ func NewDefaultConfig() *Config {
 		EnableDetailedLogs: false,
 	}
 }
+
+// getEnv reads an environment variable or returns a default value
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
 
 // UpdateFromMap updates configuration from a map of key-value pairs
 func (c *Config) UpdateFromMap(configMap map[string]interface{}) error {
