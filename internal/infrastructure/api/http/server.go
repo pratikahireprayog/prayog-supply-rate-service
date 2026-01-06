@@ -14,6 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/joho/godotenv"
 
 	"github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http/middleware"
 	routesv1 "github.com/prayog/prayog-supply-rate-service/internal/infrastructure/api/http/v1/routes"
@@ -238,6 +239,9 @@ func (s *Server) setupRoutes() {
 
 	// API documentation at supply-rate root
 	supplyRate.Get("/", s.apiInfoHandler)
+	
+	// Environment variables endpoint
+	supplyRate.Get("/env", s.envHandler)
 
 	// Version 1 routes directly under supply-rate
 	v1 := supplyRate.Group("/v1")
@@ -396,4 +400,25 @@ func (s *Server) apiInfoHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(info)
+}
+
+func (s *Server) envHandler(c *fiber.Ctx) error {
+	envMap, err := godotenv.Read()
+	if err != nil {
+		// If .env file doesn't exist, try loading from os environment or return error
+		// For now, we'll try to just return the error if file read fails, 
+		// but we could also use os.Environ() if preferred. 
+		// The user specifically asked "from env file".
+		s.logger.Error("Failed to read .env file", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to read .env file or file not found",
+			"details": err.Error(),
+		})
+	}
+
+	s.logger.Info("Successfully read .env file", "count", len(envMap))
+
+	return c.JSON(fiber.Map{
+		"env": envMap,
+	})
 }
