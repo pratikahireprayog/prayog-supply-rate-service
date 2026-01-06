@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -238,6 +239,9 @@ func (s *Server) setupRoutes() {
 
 	// API documentation at supply-rate root
 	supplyRate.Get("/", s.apiInfoHandler)
+	
+	// Environment variables endpoint
+	supplyRate.Get("/env", s.envHandler)
 
 	// Version 1 routes directly under supply-rate
 	v1 := supplyRate.Group("/v1")
@@ -396,4 +400,22 @@ func (s *Server) apiInfoHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(info)
+}
+
+func (s *Server) envHandler(c *fiber.Ctx) error {
+	envVars := os.Environ()
+	envMap := make(map[string]string)
+
+	for _, env := range envVars {
+		pair := strings.SplitN(env, "=", 2)
+		if len(pair) == 2 {
+			envMap[pair[0]] = pair[1]
+		}
+	}
+
+	s.logger.Info("Successfully fetched environment variables", "count", len(envMap))
+
+	return c.JSON(fiber.Map{
+		"env": envMap,
+	})
 }
