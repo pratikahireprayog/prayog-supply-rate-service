@@ -20,8 +20,11 @@ import (
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/factory"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/baral_rate"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/pre_defined/unified_rate"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/delhivery"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/dhl"
 	indiapost "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post"
+	indiapostintl "github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/india_post_international"
+	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/mover"
 	"github.com/prayog/prayog-supply-rate-service/internal/services/v1/implementations/real_time/naqel"
 	constants "github.com/prayog/prayog-supply-rate-service/internal/shared/constants/v1"
 	dtos "github.com/prayog/prayog-supply-rate-service/internal/shared/dtos/v1"
@@ -254,6 +257,99 @@ func initializeBaralFromEnv(ctx context.Context, partnerRepo interfaces.PartnerR
 	return nil
 }
 
+// initializeIndiaPostIntlFromEnv initializes India Post International partner from environment variables
+func initializeIndiaPostIntlFromEnv(ctx context.Context, partnerRepo interfaces.PartnerRepository) error {
+	// Check if India Post International is enabled
+	indiaPostIntlEnabled := os.Getenv("INDIA_POST_INTL_ENABLED")
+	if strings.ToLower(indiaPostIntlEnabled) != "true" {
+		log.Println("India Post International integration not enabled (INDIA_POST_INTL_ENABLED != true)")
+		return nil
+	}
+
+	log.Println("Initializing India Post International partner from environment variables...")
+
+	// Load India Post International configuration from environment
+	partnerCode := getEnvOrDefault("INDIA_POST_INTL_PARTNER_CODE", "india_post_international")
+	baseURL := getEnvOrDefault("INDIA_POST_INTL_BASE_URL", "https://test.cept.gov.in/beextcustomer")
+	loginURL := getEnvOrDefault("INDIA_POST_INTL_LOGIN_URL", "/v1/access/login")
+	tariffURL := getEnvOrDefault("INDIA_POST_INTL_TARIFF_URL", "/v1/international-tariff/itps")
+	username := getEnvOrDefault("INDIA_POST_INTL_USERNAME", "9999999999")
+	password := getEnvOrDefault("INDIA_POST_INTL_PASSWORD", "Dop@1234")
+	timeoutMs := getEnvAsIntOrDefault("INDIA_POST_INTL_TIMEOUT_MS", 30000)
+	retryCount := getEnvAsIntOrDefault("INDIA_POST_INTL_MAX_RETRIES", 3)
+	priority := getEnvAsIntOrDefault("INDIA_POST_INTL_PRIORITY", 4)
+	rating := 4.0
+
+	// Build configuration JSON
+	config := map[string]interface{}{
+		"base_url":            baseURL,
+		"login_url":           loginURL,
+		"tariff_url":          tariffURL,
+		"username":            username,
+		"password":            password,
+		"timeout_ms":          timeoutMs,
+		"max_retries":         retryCount,
+		"enabled":             true,
+		"rating":              rating,
+		"token_expiry_buffer": "5m",
+		"retry_delay":         "1s",
+	}
+
+	// Check if partner already exists
+	existingPartner, err := partnerRepo.GetByCode(ctx, partnerCode)
+	if err != nil {
+		// Try with "india_post_intl" as fallback
+		existingPartner, err = partnerRepo.GetByCode(ctx, "india_post_intl")
+	}
+
+	if err == nil && existingPartner != nil {
+		// Partner exists, update it
+		log.Printf("Updating existing India Post International partner configuration from environment")
+		existingPartner.Config = config
+		existingPartner.TimeoutMs = timeoutMs
+		existingPartner.RetryCount = retryCount
+		existingPartner.Priority = priority
+		existingPartner.IsActive = true
+
+		if err := partnerRepo.Update(ctx, existingPartner); err != nil {
+			return fmt.Errorf("failed to update India Post International partner: %w", err)
+		}
+
+		log.Printf("✅ India Post International partner updated successfully from environment variables")
+		return nil
+	}
+
+	// Partner doesn't exist, create it
+	log.Printf("Creating new India Post International partner from environment variables")
+
+	partner := &models.Partner{
+		ID:          uuid.New(),
+		Name:        "India Post International",
+		Code:        partnerCode,
+		Type:        models.PartnerTypeRealTime,
+		IsActive:    true,
+		Priority:    priority,
+		Config:      config,
+		TimeoutMs:   timeoutMs,
+		RetryCount:  retryCount,
+		Description: "India Post International shipping service configured from environment variables",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := partnerRepo.Create(ctx, partner); err != nil {
+		return fmt.Errorf("failed to create India Post International partner: %w", err)
+	}
+
+	log.Printf("✅ India Post International partner created successfully from environment variables")
+	log.Printf("   - Partner Code: %s", partnerCode)
+	log.Printf("   - Base URL: %s", baseURL)
+	log.Printf("   - Timeout: %d ms", timeoutMs)
+	log.Printf("   - Retry Count: %d", retryCount)
+
+	return nil
+}
+
 // getEnvOrDefault gets environment variable or returns default
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
@@ -286,7 +382,7 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 	// Initialize real dependencies
 	logger := NewMockLogger()                            // Using mock logger for now, can be replaced with real logger later
 	metrics := NewMockMetrics()                          // Using mock metrics for now, can be replaced with real metrics later
-	httpClient := utils.NewHTTPClient(30*time.Second, 2) // 30s timeout, 2 retries
+	httpClient := utils.NewHTTPClient(60*time.Second, 2) // 60s timeout for slow APIs, 2 retries
 
 	// Initialize database
 	db := database.NewPostgresDB(dbConfig, logger)
@@ -318,6 +414,11 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 		log.Printf("WARNING: Failed to initialize Baral from environment: %v", err)
 	}
 
+	// Auto-configure India Post International from environment variables if enabled
+	if err := initializeIndiaPostIntlFromEnv(context.Background(), partnerRepo); err != nil {
+		log.Printf("WARNING: Failed to initialize India Post International from environment: %v", err)
+	}
+
 	cleanup := func() {
 		log.Println("Cleaning up database connection...")
 		db.Close()
@@ -331,8 +432,14 @@ func initializeDependencies(dbConfig *database.PostgresConfig) (*Dependencies, f
 		switch strings.ToLower(partner.Code) {
 		case "dhl", "dhl_express":
 			return dhl.NewService(logger, metrics, httpClient), nil
-		case "india_post", "india_post_international":
+		case "delhivery":
+			return delhivery.NewService(logger, metrics, httpClient), nil
+		case "india_post":
 			return indiapost.NewService(logger, metrics, httpClient), nil
+		case "india_post_international", "india_post_intl":
+			return indiapostintl.NewService(logger, metrics, httpClient), nil
+		case "mover":
+			return mover.NewService(logger, metrics, httpClient), nil
 		case "naqel", "naqel_express":
 			return naqel.NewService(logger, metrics, httpClient), nil
 		default:
@@ -405,8 +512,14 @@ func initializeMockDependencies(logger MockLogger, metrics MockMetrics, httpClie
 		switch strings.ToLower(partner.Code) {
 		case "dhl", "dhl_express":
 			return dhl.NewService(logger, metrics, httpClient), nil
-		case "india_post", "india_post_international":
+		case "delhivery":
+			return delhivery.NewService(logger, metrics, httpClient), nil
+		case "india_post":
 			return indiapost.NewService(logger, metrics, httpClient), nil
+		case "india_post_international", "india_post_intl":
+			return indiapostintl.NewService(logger, metrics, httpClient), nil
+		case "mover":
+			return mover.NewService(logger, metrics, httpClient), nil
 		case "naqel", "naqel_express":
 			return naqel.NewService(logger, metrics, httpClient), nil
 		default:

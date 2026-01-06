@@ -342,42 +342,54 @@ func (s *Service) callAramexAPI(ctx context.Context, request *AramexRateRequest)
 }
 
 // mapProductTypeToServiceLevel maps product type to service level name
-func (s *Service) mapProductTypeToServiceLevel(serviceType string) string {
-    switch strings.ToLower(serviceType) {
-    case "express":
-        return "Priority Parcel Express"
-    case "standard":
-        return "Parcel Express"
-    case "economy":
-        return "Ground Parcel"
-    default:
-        return "Priority Parcel Express"
-    }
+func (s *Service) mapProductTypeToServiceLevel(productType string) string {
+	switch strings.ToUpper(productType) {
+	case "PDX":
+		return "Priority Document Express"
+	case "PPX":
+		return "Priority Parcel Express"
+	case "PLX":
+		return "Priority Letter Express"
+	case "DDX":
+		return "Deferred Document Express"
+	case "DPX":
+		return "Deferred Parcel Express"
+	case "GDX":
+		return "Ground Document Express"
+	case "GPX":
+		return "Ground Parcel Express"
+	case "EPX":
+		return "Economy Parcel Express"
+	default:
+		return "Priority Parcel Express"
+	}
 }
 
-// getEstimatedDays provides estimated delivery days based on service type and route
-func (s *Service) getEstimatedDays(serviceType, originCountry, destCountry string) int {
-    isInternational := originCountry != destCountry
-    
-    switch strings.ToLower(serviceType) {
-    case "express":
-        if isInternational {
-            return 2
-        }
-        return 1
-    case "standard":
-        if isInternational {
-            return 4
-        }
-        return 2
-    case "economy":
-        if isInternational {
-            return 7
-        }
-        return 4
-    default:
-        return 3
-    }
+// getEstimatedDays provides estimated delivery days based on product type and route
+func (s *Service) getEstimatedDays(productType, originCountry, destCountry string) int {
+	isInternational := originCountry != destCountry
+	
+	switch strings.ToUpper(productType) {
+	case "PDX", "PPX", "PLX": // Priority services
+		if isInternational {
+			return 2
+		}
+		return 1
+	case "DDX", "DPX": // Deferred (2nd Day Delivery)
+		return 2
+	case "GDX", "GPX": // Ground services
+		if isInternational {
+			return 7
+		}
+		return 4
+	case "EPX": // Economy
+		if isInternational {
+			return 7
+		}
+		return 5
+	default:
+		return 3
+	}
 }
 
 // IsHealthy performs health check for Aramex API

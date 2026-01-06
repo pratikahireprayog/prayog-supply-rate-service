@@ -50,6 +50,7 @@ type LoginRequest struct {
 
 // LoginResponse represents the login API response
 type LoginResponse struct {
+	Success         bool                   `json:"success"`
 	IDToken         string                 `json:"id_token"`
 	RefreshToken    string                 `json:"refresh_token"`
 	ExpiresIn       int                    `json:"expires_in"`
@@ -64,6 +65,10 @@ type LoginResponse struct {
 	TenantSource    string                 `json:"tenant_source"`
 	TenantHierarchy map[string]interface{} `json:"tenant_hierarchy"`
 	RoleDescription string                 `json:"role_description"`
+	// Error response fields
+	Status  string `json:"status"`
+	Error   string `json:"error"`
+	Message string `json:"message"`
 }
 
 // NewAuthService creates a new authentication service
@@ -166,20 +171,23 @@ func (a *AuthService) refreshToken(ctx context.Context) (string, error) {
 
 	// Prepare headers
 	headers := map[string]string{
-		"Accept":             "*/*",
-		"Accept-Language":    "en-US,en;q=0.9",
+		"Accept":             "application/json, text/plain, */*",
+		"Accept-Language":    "en-GB,en-US;q=0.9,en;q=0.8",
 		"Connection":         "keep-alive",
 		"Content-Type":       "application/json",
-		"Origin":             "https://prayog-supply.sandbox-app.prayog.io",
-		"Referer":            "https://prayog-supply.sandbox-app.prayog.io/",
+		"Origin":             "https://viasetu.sandbox-app.prayog.io",
+		"Referer":            "https://viasetu.sandbox-app.prayog.io/",
 		"Sec-Fetch-Dest":     "empty",
 		"Sec-Fetch-Mode":     "cors",
 		"Sec-Fetch-Site":     "same-site",
-		"User-Agent":         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-		"sec-ch-ua":          `"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"`,
+		"User-Agent":         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+		"sec-ch-ua":          `"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"`,
 		"sec-ch-ua-mobile":   "?0",
 		"sec-ch-ua-platform": `"macOS"`,
 	}
+	
+	// Note: tenantId header is not sent in login request to match the working API behavior
+	// The tenantId can be used for API calls after authentication, but login uses user's default tenant
 
 	// Set timeout for auth request
 	authCtx, cancel := context.WithTimeout(ctx, time.Duration(a.config.TimeoutMs)*time.Millisecond)
@@ -207,8 +215,31 @@ func (a *AuthService) refreshToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to parse authentication response: %w", err)
 	}
 
-	// Validate response
+	// Check if authentication was successful
+	// If we have an id_token, treat as success (API may not include success field)
+	// Only fail if success is explicitly false AND we don't have a token, or if token is missing
 	if loginResponse.IDToken == "" {
+		// No token - check if success field indicates failure
+		if loginResponse.Success == false {
+			errorMsg := loginResponse.Message
+			if errorMsg == "" {
+				errorMsg = loginResponse.Error
+			}
+			if errorMsg == "" {
+				errorMsg = loginResponse.Status
+			}
+			if errorMsg == "" {
+				errorMsg = "authentication failed"
+			}
+			a.logger.Error("Authentication failed",
+				"success", loginResponse.Success,
+				"status", loginResponse.Status,
+				"error", loginResponse.Error,
+				"message", loginResponse.Message,
+				"tenant_id", loginResponse.TenantID)
+			return "", fmt.Errorf("authentication failed: %s", errorMsg)
+		}
+		// No token and no explicit failure - still error
 		a.logger.Error("Authentication response missing ID token")
 		return "", fmt.Errorf("authentication response missing ID token")
 	}
